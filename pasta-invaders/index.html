@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pasta Invaders</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="ui">
+      <h1>Pasta Invaders</h1>
+      <div class="info">
+        <span id="score-label">Score: <span id="score">0</span></span>
+        <span id="lives-label">Lives: <span id="lives">3</span></span>
+        <span id="level-label">Level: <span id="level">1</span></span>
+      </div>
+      <p class="help">
+        Move with <strong>&larr;/&rarr;</strong> or <strong>A/D</strong>.
+        Shoot sauce with <strong>Space</strong>.
+      </p>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <div class="overlay hidden" id="startScreen">
+      <div class="panel">
+        <h2>Welcome, Chef</h2>
+        <p>Defend your kitchen from the pasta invasion!</p>
+        <button id="startButton">Start</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="gameOverScreen">
+      <div class="panel">
+        <h2 id="gameOverTitle">Game Over</h2>
+        <p id="finalScoreText"></p>
+        <button id="restartButton">Play Again</button>
+      </div>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+  </html>
