@@ -1,0 +1,106 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  background: radial-gradient(circle at top, #3b4b63 0, #252f3b 45%, #141925 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  color: #f5f7fb;
+}
+
+.ui {
+  margin-top: 16px;
+  text-align: center;
+  color: #f5f7fb;
+  text-shadow: 0 1px 0 #0d1117;
+}
+
+.ui h1 {
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+}
+
+.info {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.help {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+canvas {
+  margin: 20px 0 32px;
+  border-radius: 16px;
+  border: 4px solid #0f172a;
+  background: radial-gradient(circle at top, #1f2937 0, #020617 55%, #000 100%);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.65),
+    0 4px 0 #020617;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.panel {
+  background: #0b1220;
+  border-radius: 16px;
+  padding: 24px 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  max-width: 320px;
+  color: #f9fafb;
+}
+
+.panel h2 {
+  margin-bottom: 8px;
+}
+
+.panel p {
+  margin-bottom: 16px;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* Italian flag inspired: green → white highlight → red */
+  background: linear-gradient(135deg, #198754, #f3f4f6 35%, #dc2626);
+  color: #fff;
+  box-shadow: 0 4px 0 #111827;
+  transition: transform 0.05s ease, box-shadow 0.05s ease, filter 0.15s ease;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+button:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #b13710;
+}
