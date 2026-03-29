@@ -317,26 +317,30 @@
       const rimY = hoop.centerY;
 
       const inHoopX = ball.x > rimLeftX + RIM_RADIUS && ball.x < rimRightX - RIM_RADIUS;
-      const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - RIM_RADIUS * 2 &&
-                        ball.x - BALL_RADIUS < rimRightX + RIM_RADIUS * 2;
 
-      if (nearHoopX) {
-        // Rim collision (left)
-        const dxL = ball.x - rimLeftX;
-        const dyL = ball.y - rimY;
-        const distL = Math.sqrt(dxL * dxL + dyL * dyL);
-        if (distL < BALL_RADIUS + RIM_RADIUS) {
-          bounceOffRim(rimLeftX, rimY);
-          continue;
-        }
+      // Skip rim collisions for already-scored hoops so ball passes through
+      if (!hoop.scored) {
+        const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - RIM_RADIUS * 2 &&
+                          ball.x - BALL_RADIUS < rimRightX + RIM_RADIUS * 2;
 
-        // Rim collision (right)
-        const dxR = ball.x - rimRightX;
-        const dyR = ball.y - rimY;
-        const distR = Math.sqrt(dxR * dxR + dyR * dyR);
-        if (distR < BALL_RADIUS + RIM_RADIUS) {
-          bounceOffRim(rimRightX, rimY);
-          continue;
+        if (nearHoopX) {
+          // Rim collision (left)
+          const dxL = ball.x - rimLeftX;
+          const dyL = ball.y - rimY;
+          const distL = Math.sqrt(dxL * dxL + dyL * dyL);
+          if (distL < BALL_RADIUS + RIM_RADIUS) {
+            bounceOffRim(rimLeftX, rimY);
+            continue;
+          }
+
+          // Rim collision (right)
+          const dxR = ball.x - rimRightX;
+          const dyR = ball.y - rimY;
+          const distR = Math.sqrt(dxR * dxR + dyR * dyR);
+          if (distR < BALL_RADIUS + RIM_RADIUS) {
+            bounceOffRim(rimRightX, rimY);
+            continue;
+          }
         }
       }
 
