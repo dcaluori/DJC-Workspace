@@ -1,42 +1,450 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Pasta Invaders</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="ui">
-      <h1>Pasta Invaders</h1>
-      <div class="info">
-        <span id="score-label">Score: <span id="score">0</span></span>
-        <span id="lives-label">Lives: <span id="lives">3</span></span>
-        <span id="level-label">Level: <span id="level">1</span></span>
-      </div>
-      <p class="help">
-        Move with <strong>&larr;/&rarr;</strong> or <strong>A/D</strong>.
-        Shoot sauce with <strong>Space</strong>.
-      </p>
-    </div>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+<head>
+<meta charset="UTF-8" />
+<title>Flappy Dunk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    <div class="overlay hidden" id="startScreen">
-      <div class="panel">
-        <h2>Welcome, Chef</h2>
-        <p>Defend your kitchen from the pasta invasion!</p>
-        <button id="startButton">Start</button>
-      </div>
-    </div>
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
 
-    <div class="overlay hidden" id="gameOverScreen">
-      <div class="panel">
-        <h2 id="gameOverTitle">Game Over</h2>
-        <p id="finalScoreText"></p>
-        <button id="restartButton">Play Again</button>
-      </div>
-    </div>
+body {
+  background: #1a1a2e;
+}
 
-    <script src="game.js"></script>
-  </body>
-  </html>
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.panel {
+  background: linear-gradient(145deg, #16213e, #0f3460);
+  border: 2px solid #e94560;
+  border-radius: 20px;
+  padding: 32px 40px;
+  box-shadow: 0 12px 40px rgba(233, 69, 96, 0.3);
+  text-align: center;
+  max-width: 320px;
+  color: #f5f5f5;
+}
+
+.panel h1 {
+  font-size: 2.4rem;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #ff6b35, #e94560, #ff6b35);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.panel h2 {
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+  color: #e94560;
+}
+
+.panel p {
+  margin-bottom: 16px;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 14px 36px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, #e94560, #ff6b35);
+  color: #fff;
+  box-shadow: 0 4px 0 #a3233d, 0 8px 20px rgba(233, 69, 96, 0.4);
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+  letter-spacing: 0.5px;
+}
+
+button:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #a3233d;
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<div class="overlay" id="startScreen">
+  <div class="panel">
+    <h1>Flappy Dunk</h1>
+    <p>Tap to flap. Dunk through the hoops!</p>
+    <button id="startButton">Play</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="gameOverScreen">
+  <div class="panel">
+    <h2>Game Over</h2>
+    <p id="finalScoreText"></p>
+    <p id="bestScoreText"></p>
+    <button id="restartButton">Play Again</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const startScreen = document.getElementById("startScreen");
+  const gameOverScreen = document.getElementById("gameOverScreen");
+  const finalScoreText = document.getElementById("finalScoreText");
+  const bestScoreText = document.getElementById("bestScoreText");
+
+  const GRAVITY = 0.45;
+  const FLAP_STRENGTH = -8;
+  const BALL_RADIUS = 18;
+  const HOOP_GAP = 160;
+  const HOOP_WIDTH = 70;
+  const HOOP_SPEED_BASE = 3;
+  const RIM_RADIUS = 6;
+  const NET_DEPTH = 30;
+
+  let w, h;
+  let ball, hoops, particles, trailParticles;
+  let score, bestScore, scrollSpeed;
+  let running, dead, started;
+  let frameId;
+  let combo;
+  let screenShake, shakeTimer;
+  let flashAlpha;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  bestScore = parseInt(localStorage.getItem("flappyDunkBest") || "0", 10);
+
+  function init() {
+    ball = { x: w * 0.25, y: h * 0.4, vy: 0, rotation: 0, rotationSpeed: 0 };
+    hoops = [];
+    particles = [];
+    trailParticles = [];
+    score = 0;
+    combo = 0;
+    scrollSpeed = HOOP_SPEED_BASE;
+    running = false;
+    dead = false;
+    started = false;
+    screenShake = 0;
+    shakeTimer = 0;
+    flashAlpha = 0;
+    for (let i = 0; i < 4; i++) spawnHoop(w + i * (w * 0.42));
+  }
+
+  function spawnHoop(x) {
+    const minY = h * 0.2 + HOOP_GAP / 2;
+    const maxY = h * 0.8 - HOOP_GAP / 2;
+    const centerY = minY + Math.random() * (maxY - minY);
+    hoops.push({ x, centerY, scored: false });
+  }
+
+  function flap() {
+    if (dead) return;
+    if (!started) { started = true; running = true; }
+    ball.vy = FLAP_STRENGTH;
+    ball.rotationSpeed = -0.3;
+    for (let i = 0; i < 5; i++) {
+      particles.push({
+        x: ball.x, y: ball.y + BALL_RADIUS,
+        vx: (Math.random() - 0.5) * 3, vy: Math.random() * 2 + 1,
+        life: 1, decay: 0.03 + Math.random() * 0.02,
+        radius: 2 + Math.random() * 3,
+        color: `hsl(${30 + Math.random() * 20}, 90%, 60%)`
+      });
+    }
+  }
+
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); flap(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); flap(); }
+  });
+
+  document.getElementById("startButton").addEventListener("click", () => {
+    startScreen.classList.add("hidden"); init(); loop();
+  });
+  document.getElementById("restartButton").addEventListener("click", () => {
+    gameOverScreen.classList.add("hidden"); init(); loop();
+  });
+
+  function scoreDunk(hoop) {
+    score++;
+    combo++;
+    flashAlpha = 0.3;
+    const colors = ["#ff6b35", "#e94560", "#ffdd57", "#48dbfb", "#0abde3", "#ff9ff3"];
+    for (let i = 0; i < 15; i++) {
+      const angle = (Math.PI * 2 * i) / 15;
+      const speed = 2 + Math.random() * 4;
+      particles.push({
+        x: hoop.x, y: hoop.centerY,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2,
+        life: 1, decay: 0.015 + Math.random() * 0.01,
+        radius: 3 + Math.random() * 4,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+    scrollSpeed = HOOP_SPEED_BASE + Math.floor(score / 5) * 0.5;
+  }
+
+  function die() {
+    if (dead) return;
+    dead = true; running = false;
+    screenShake = 8; shakeTimer = 15;
+    if (score > bestScore) {
+      bestScore = score;
+      localStorage.setItem("flappyDunkBest", bestScore.toString());
+    }
+    for (let i = 0; i < 20; i++) {
+      const angle = (Math.PI * 2 * i) / 20;
+      const speed = 2 + Math.random() * 3;
+      particles.push({
+        x: ball.x, y: ball.y,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 1, decay: 0.02, radius: 3 + Math.random() * 4,
+        color: `hsl(${10 + Math.random() * 30}, 80%, 55%)`
+      });
+    }
+    setTimeout(() => {
+      finalScoreText.textContent = `Score: ${score}`;
+      bestScoreText.textContent = `Best: ${bestScore}`;
+      gameOverScreen.classList.remove("hidden");
+    }, 800);
+  }
+
+  function checkCollisions() {
+    if (ball.y - BALL_RADIUS < 0 || ball.y + BALL_RADIUS > h) { die(); return; }
+    for (const hoop of hoops) {
+      const rimLeftX = hoop.x - HOOP_WIDTH / 2;
+      const rimRightX = hoop.x + HOOP_WIDTH / 2;
+      const rimY = hoop.centerY;
+      const inHoopX = ball.x > rimLeftX + RIM_RADIUS && ball.x < rimRightX - RIM_RADIUS;
+      const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - RIM_RADIUS && ball.x - BALL_RADIUS < rimRightX + RIM_RADIUS;
+      if (nearHoopX) {
+        const dxL = ball.x - rimLeftX, dyL = ball.y - rimY;
+        if (Math.sqrt(dxL * dxL + dyL * dyL) < BALL_RADIUS + RIM_RADIUS) { die(); return; }
+        const dxR = ball.x - rimRightX, dyR = ball.y - rimY;
+        if (Math.sqrt(dxR * dxR + dyR * dyR) < BALL_RADIUS + RIM_RADIUS) { die(); return; }
+        const backboardX = rimRightX + HOOP_WIDTH * 0.15;
+        if (ball.x + BALL_RADIUS > backboardX - 4 && ball.x - BALL_RADIUS < backboardX + 4) {
+          if (ball.y < rimY - HOOP_GAP * 0.05 || ball.y > rimY + HOOP_GAP * 0.05) { die(); return; }
+        }
+      }
+      if (!hoop.scored && inHoopX && ball.y > rimY - 5 && ball.y < rimY + 25 && ball.vy > 0) {
+        hoop.scored = true; scoreDunk(hoop);
+      }
+    }
+  }
+
+  function update() {
+    if (!running && started) return;
+    if (!started) return;
+    ball.vy += GRAVITY;
+    ball.y += ball.vy;
+    ball.rotation += ball.rotationSpeed;
+    ball.rotationSpeed *= 0.98;
+    ball.rotationSpeed += 0.02;
+    if (Math.abs(ball.vy) > 2) {
+      trailParticles.push({ x: ball.x, y: ball.y, life: 1, decay: 0.06, radius: BALL_RADIUS * 0.6 });
+    }
+    for (const hoop of hoops) hoop.x -= scrollSpeed;
+    if (hoops.length > 0 && hoops[0].x < -HOOP_WIDTH * 2) {
+      hoops.shift();
+      const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
+      spawnHoop(lastX + w * 0.38 + Math.random() * w * 0.08);
+    }
+    while (hoops.length < 5) {
+      const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
+      spawnHoop(lastX + w * 0.38 + Math.random() * w * 0.08);
+    }
+    checkCollisions();
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= p.decay;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = trailParticles.length - 1; i >= 0; i--) {
+      trailParticles[i].life -= trailParticles[i].decay;
+      if (trailParticles[i].life <= 0) trailParticles.splice(i, 1);
+    }
+    if (shakeTimer > 0) { shakeTimer--; if (shakeTimer <= 0) screenShake = 0; }
+    if (flashAlpha > 0) flashAlpha -= 0.02;
+  }
+
+  function drawBall() {
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(ball.rotation);
+    ctx.beginPath(); ctx.arc(2, 3, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fill();
+    const grad = ctx.createRadialGradient(-4, -6, 2, 0, 0, BALL_RADIUS);
+    grad.addColorStop(0, "#ff8a3d"); grad.addColorStop(0.7, "#e94560"); grad.addColorStop(1, "#c0392b");
+    ctx.beginPath(); ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-BALL_RADIUS, 0); ctx.lineTo(BALL_RADIUS, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -BALL_RADIUS); ctx.lineTo(0, BALL_RADIUS); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-BALL_RADIUS * 0.35, 0, BALL_RADIUS * 0.9, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(BALL_RADIUS * 0.35, 0, BALL_RADIUS * 0.9, Math.PI * 0.5, -Math.PI * 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-5, -6, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHoop(hoop) {
+    const rimY = hoop.centerY;
+    const leftX = hoop.x - HOOP_WIDTH / 2;
+    const rightX = hoop.x + HOOP_WIDTH / 2;
+    const bbX = rightX + HOOP_WIDTH * 0.15;
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.fillRect(bbX - 3, rimY - 50, 6, 100);
+    ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 1;
+    ctx.strokeRect(bbX - 3, rimY - 50, 6, 100);
+    ctx.strokeStyle = "#888"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bbX, rimY); ctx.lineTo(rightX, rimY); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const t = i / 5;
+      const topX = leftX + t * HOOP_WIDTH;
+      const bottomX = hoop.x - (HOOP_WIDTH * 0.7) / 2 + t * HOOP_WIDTH * 0.7;
+      ctx.beginPath(); ctx.moveTo(topX, rimY); ctx.lineTo(bottomX, rimY + NET_DEPTH); ctx.stroke();
+    }
+    for (let j = 1; j <= 3; j++) {
+      const t = j / 4;
+      const cw = HOOP_WIDTH * (1 - t * 0.3);
+      ctx.beginPath(); ctx.moveTo(hoop.x - cw / 2, rimY + t * NET_DEPTH);
+      ctx.lineTo(hoop.x + cw / 2, rimY + t * NET_DEPTH); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(leftX, rimY, RIM_RADIUS, 0, Math.PI * 2);
+    const rimGrad = ctx.createRadialGradient(leftX - 1, rimY - 2, 1, leftX, rimY, RIM_RADIUS);
+    rimGrad.addColorStop(0, "#ff6b35"); rimGrad.addColorStop(1, "#e94560");
+    ctx.fillStyle = rimGrad; ctx.fill();
+    ctx.strokeStyle = "#c0392b"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(rightX, rimY, RIM_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = rimGrad; ctx.fill(); ctx.strokeStyle = "#c0392b"; ctx.stroke();
+    ctx.strokeStyle = "#e94560"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(leftX, rimY); ctx.lineTo(rightX, rimY); ctx.stroke();
+    if (hoop.scored) {
+      ctx.save(); ctx.globalAlpha = 0.15;
+      ctx.beginPath(); ctx.arc(hoop.x, rimY, HOOP_WIDTH * 0.7, 0, Math.PI * 2);
+      const glowGrad = ctx.createRadialGradient(hoop.x, rimY, 0, hoop.x, rimY, HOOP_WIDTH * 0.7);
+      glowGrad.addColorStop(0, "#ffdd57"); glowGrad.addColorStop(1, "transparent");
+      ctx.fillStyle = glowGrad; ctx.fill(); ctx.restore();
+    }
+  }
+
+  function drawBackground() {
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+    skyGrad.addColorStop(0, "#0f0c29"); skyGrad.addColorStop(0.5, "#302b63"); skyGrad.addColorStop(1, "#24243e");
+    ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    for (let i = 0; i < 60; i++) {
+      const sx = ((42 * (i + 1) * 7919) % w);
+      const sy = ((42 * (i + 1) * 6271) % (h * 0.6));
+      const sr = ((i * 3571) % 3) * 0.5 + 0.5;
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#16132b";
+    const buildings = [
+      [0, 0.7], [0.05, 0.55], [0.1, 0.65], [0.15, 0.45], [0.2, 0.6],
+      [0.25, 0.5], [0.3, 0.68], [0.35, 0.4], [0.4, 0.58], [0.45, 0.62],
+      [0.5, 0.38], [0.55, 0.55], [0.6, 0.48], [0.65, 0.6], [0.7, 0.42],
+      [0.75, 0.58], [0.8, 0.52], [0.85, 0.65], [0.9, 0.5], [0.95, 0.6], [1, 0.7]
+    ];
+    ctx.beginPath(); ctx.moveTo(0, h);
+    for (const [bx, by] of buildings) ctx.lineTo(bx * w, h * by);
+    ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,200,50,0.15)";
+    for (let i = 0; i < buildings.length - 1; i++) {
+      const [bx1, by1] = buildings[i]; const [bx2] = buildings[i + 1];
+      const topY = h * by1; const bw = (bx2 - bx1) * w;
+      for (let wy = topY + 10; wy < h - 10; wy += 14)
+        for (let wx = bx1 * w + 5; wx < bx1 * w + bw - 5; wx += 10)
+          if ((wx * 31 + wy * 17) % 7 < 3) ctx.fillRect(wx, wy, 4, 6);
+    }
+  }
+
+  function drawUI() {
+    ctx.save(); ctx.fillStyle = "#fff"; ctx.font = "bold 48px system-ui";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.shadowColor = "rgba(233,69,96,0.6)"; ctx.shadowBlur = 12;
+    ctx.fillText(score, w / 2, 40); ctx.restore();
+    if (combo > 1) {
+      ctx.save(); ctx.fillStyle = "#ffdd57"; ctx.font = "bold 24px system-ui";
+      ctx.textAlign = "center"; ctx.fillText(`${combo}x combo!`, w / 2, 95); ctx.restore();
+    }
+    if (!started) {
+      ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "18px system-ui";
+      ctx.textAlign = "center"; ctx.fillText("Tap anywhere to flap", w / 2, h * 0.65); ctx.restore();
+    }
+  }
+
+  function draw() {
+    ctx.save();
+    if (screenShake > 0) {
+      ctx.translate((Math.random() - 0.5) * screenShake * 2, (Math.random() - 0.5) * screenShake * 2);
+      screenShake *= 0.85;
+    }
+    drawBackground();
+    for (const t of trailParticles) {
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.radius * t.life, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(233, 69, 96, ${t.life * 0.3})`; ctx.fill();
+    }
+    for (const hoop of hoops) drawHoop(hoop);
+    for (const p of particles) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+      ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.fill(); ctx.globalAlpha = 1;
+    }
+    drawBall();
+    if (flashAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 221, 87, ${flashAlpha})`; ctx.fillRect(0, 0, w, h);
+    }
+    drawUI();
+    ctx.restore();
+  }
+
+  function loop() { update(); draw(); frameId = requestAnimationFrame(loop); }
+  init();
+})();
+</script>
+</body>
+</html>
