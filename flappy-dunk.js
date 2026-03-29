@@ -13,10 +13,9 @@
   const GRAVITY = 0.28;
   const FLAP_STRENGTH = -6;
   const BALL_RADIUS = 20;
-  const HOOP_WIDTH = 75;
+  const HOLE_RADIUS = BALL_RADIUS * 1.5; // hole diameter = 1.5x ball diameter
+  const DONUT_TUBE = 12; // thickness of the donut ring
   const HOOP_SPEED_BASE = 2.2;
-  const RIM_RADIUS = 7;
-  const NET_DEPTH = 30;
 
   // ─── State ───
   let w, h;
@@ -180,8 +179,8 @@
       score += 1;
     }
 
-    // Fire burst
-    const colors = ["#ff4500", "#ff6600", "#ffaa00", "#ffdd00", "#ff2200"];
+    // Sprinkle burst
+    const colors = ["#ff69b4", "#ffdd00", "#33cc33", "#3399ff", "#ff6633", "#cc33ff"];
     for (let i = 0; i < 12; i++) {
       const angle = (Math.PI * 2 * i) / 12;
       const speed = 2 + Math.random() * 3;
@@ -236,51 +235,45 @@
   }
 
   // ─── Rim bounce ───
-  function bounceOffRim(rimX, rimY) {
+  function bounceOffRim(rimX, rimY, hoopCenterX) {
     const dx = ball.x - rimX;
     const dy = ball.y - rimY;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist === 0) return;
 
-    // Normalize collision vector
     const nx = dx / dist;
     const ny = dy / dist;
 
-    // Push ball out of rim
-    const overlap = (BALL_RADIUS + RIM_RADIUS) - dist;
+    // Push ball out of donut edge
+    const overlap = (BALL_RADIUS + DONUT_TUBE) - dist;
     ball.x += nx * overlap;
     ball.y += ny * overlap;
 
-    // Reflect velocity off the normal
+    // Reflect velocity
     const dot = ball.vx * nx + ball.vy * ny;
     const bounceFactor = 0.55;
     ball.vx = (ball.vx - 2 * dot * nx) * bounceFactor;
     ball.vy = (ball.vy - 2 * dot * ny) * bounceFactor;
 
-    // Bias towards going in (nudge ball towards hoop center horizontally)
-    const hoopCenterX = rimX < ball.x ? rimX + HOOP_WIDTH / 2 : rimX - HOOP_WIDTH / 2;
-    const biasStrength = 0.8;
-    ball.vx += (hoopCenterX - ball.x) * 0.015 * biasStrength;
-
-    // If ball is above rim and moving down, bias it slightly inward
-    if (ball.y < rimY && ball.vy > 0) {
-      ball.vy *= 0.7;
-    }
+    // Bias towards going in
+    ball.vx += (hoopCenterX - ball.x) * 0.012;
+    if (ball.y < rimY && ball.vy > 0) ball.vy *= 0.7;
 
     ball.rotationSpeed = (Math.random() - 0.5) * 0.4;
     cleanStreak = 0;
 
-    // Spark particles
-    for (let i = 0; i < 5; i++) {
+    // Sprinkle particles on bounce
+    const sprinkleColors = ["#ff69b4", "#ff1493", "#ffdd57", "#44dd44", "#44bbff", "#ff6633"];
+    for (let i = 0; i < 6; i++) {
       particles.push({
-        x: rimX + nx * RIM_RADIUS,
-        y: rimY + ny * RIM_RADIUS,
-        vx: (Math.random() - 0.5) * 3,
-        vy: (Math.random() - 0.5) * 3 - 1,
+        x: rimX + nx * DONUT_TUBE,
+        y: rimY + ny * DONUT_TUBE,
+        vx: (Math.random() - 0.5) * 4,
+        vy: (Math.random() - 0.5) * 4 - 1,
         life: 1,
-        decay: 0.04,
+        decay: 0.035,
         radius: 2 + Math.random() * 2,
-        color: `hsl(${30 + Math.random() * 30}, 100%, 60%)`,
+        color: sprinkleColors[Math.floor(Math.random() * sprinkleColors.length)],
       });
     }
   }
@@ -312,39 +305,62 @@
     }
 
     for (const hoop of hoops) {
-      const rimLeftX = hoop.x - HOOP_WIDTH / 2;
-      const rimRightX = hoop.x + HOOP_WIDTH / 2;
+      const rimLeftX = hoop.x - HOLE_RADIUS;
+      const rimRightX = hoop.x + HOLE_RADIUS;
       const rimY = hoop.centerY;
 
-      const inHoopX = ball.x > rimLeftX + RIM_RADIUS && ball.x < rimRightX - RIM_RADIUS;
+      const inHoopX = ball.x > rimLeftX + DONUT_TUBE * 0.5 && ball.x < rimRightX - DONUT_TUBE * 0.5;
 
-      // Skip rim collisions for already-scored hoops so ball passes through
+      // Skip collisions for already-scored hoops so ball passes through
       if (!hoop.scored) {
-        const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - RIM_RADIUS * 2 &&
-                          ball.x - BALL_RADIUS < rimRightX + RIM_RADIUS * 2;
+        const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - DONUT_TUBE * 2 &&
+                          ball.x - BALL_RADIUS < rimRightX + DONUT_TUBE * 2;
 
         if (nearHoopX) {
-          // Rim collision (left)
+          // Left edge of donut hole
           const dxL = ball.x - rimLeftX;
           const dyL = ball.y - rimY;
           const distL = Math.sqrt(dxL * dxL + dyL * dyL);
-          if (distL < BALL_RADIUS + RIM_RADIUS) {
-            bounceOffRim(rimLeftX, rimY);
+          if (distL < BALL_RADIUS + DONUT_TUBE) {
+            bounceOffRim(rimLeftX, rimY, hoop.x);
             continue;
           }
 
-          // Rim collision (right)
+          // Right edge of donut hole
           const dxR = ball.x - rimRightX;
           const dyR = ball.y - rimY;
           const distR = Math.sqrt(dxR * dxR + dyR * dyR);
-          if (distR < BALL_RADIUS + RIM_RADIUS) {
-            bounceOffRim(rimRightX, rimY);
+          if (distR < BALL_RADIUS + DONUT_TUBE) {
+            bounceOffRim(rimRightX, rimY, hoop.x);
             continue;
+          }
+
+          // Top/bottom of donut body (outside the hole)
+          if (!inHoopX) {
+            const dxC = ball.x - hoop.x;
+            const dyC = ball.y - rimY;
+            const distC = Math.sqrt(dxC * dxC + dyC * dyC);
+            const outerRadius = HOLE_RADIUS + DONUT_TUBE;
+            if (distC < BALL_RADIUS + outerRadius && distC > HOLE_RADIUS - DONUT_TUBE) {
+              // Bounce off the outer donut body
+              if (distC > 0) {
+                const nx = dxC / distC;
+                const ny = dyC / distC;
+                const targetDist = BALL_RADIUS + outerRadius;
+                ball.x = hoop.x + nx * targetDist;
+                ball.y = rimY + ny * targetDist;
+                const dot = ball.vx * nx + ball.vy * ny;
+                ball.vx = (ball.vx - 2 * dot * nx) * 0.5;
+                ball.vy = (ball.vy - 2 * dot * ny) * 0.5;
+                ball.vx += (hoop.x - ball.x) * 0.01;
+                cleanStreak = 0;
+              }
+            }
           }
         }
       }
 
-      // Scoring - ball passes through hoop center going downward
+      // Scoring - ball passes through donut hole going downward
       if (!hoop.scored && inHoopX && ball.y > rimY - 5 && ball.y < rimY + 30 && ball.vy > 0) {
         hoop.scored = true;
         scoreDunk(hoop, true);
@@ -390,7 +406,7 @@
     }
 
     // Remove off-screen hoops, spawn new
-    if (hoops.length > 0 && hoops[0].x < -HOOP_WIDTH * 2) {
+    if (hoops.length > 0 && hoops[0].x < -(HOLE_RADIUS + DONUT_TUBE) * 2) {
       hoops.shift();
       const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
       spawnHoop(lastX + w * 0.4 + Math.random() * w * 0.08);
@@ -667,92 +683,125 @@
     ctx.restore();
   }
 
-  function drawFireHoop(hoop) {
-    const rimY = hoop.centerY;
-    const leftX = hoop.x - HOOP_WIDTH / 2;
-    const rightX = hoop.x + HOOP_WIDTH / 2;
+  function drawDonut(hoop) {
+    const cy = hoop.centerY;
+    const cx = hoop.x;
+    const outerR = HOLE_RADIUS + DONUT_TUBE;
+    const innerR = HOLE_RADIUS;
     const phase = hoop.firePhase;
 
-    // Fire glow behind hoop
+    // Shadow
     ctx.save();
-    const glowGrad = ctx.createRadialGradient(hoop.x, rimY, HOOP_WIDTH * 0.3, hoop.x, rimY, HOOP_WIDTH * 0.9);
-    glowGrad.addColorStop(0, "rgba(255, 100, 0, 0.15)");
-    glowGrad.addColorStop(1, "rgba(255, 50, 0, 0)");
-    ctx.fillStyle = glowGrad;
+    ctx.globalAlpha = 0.2;
     ctx.beginPath();
-    ctx.arc(hoop.x, rimY, HOOP_WIDTH * 0.9, 0, Math.PI * 2);
+    ctx.ellipse(cx + 3, cy + 4, outerR, outerR * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
     ctx.fill();
     ctx.restore();
 
-    // Fire particles around the hoop ring
-    const numFlames = 24;
-    for (let i = 0; i < numFlames; i++) {
-      const angle = (Math.PI * 2 * i) / numFlames;
-      const rx = hoop.x + Math.cos(angle) * (HOOP_WIDTH / 2);
-      const ry = rimY + Math.sin(angle) * (HOOP_WIDTH / 2) * 0.35;
+    // Draw donut body using ellipse (viewed at angle for 3D feel)
+    // Back half of donut (behind the hole)
+    ctx.save();
 
-      const flicker = Math.sin(phase + i * 1.3) * 0.5 + 0.5;
-      const flameHeight = 8 + flicker * 12;
+    // Donut base color (golden brown)
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, outerR, outerR * 0.38, 0, 0, Math.PI * 2);
+    const donutGrad = ctx.createRadialGradient(cx - 5, cy - 5, innerR * 0.3, cx, cy, outerR);
+    donutGrad.addColorStop(0, "#e8a840");
+    donutGrad.addColorStop(0.5, "#d4882a");
+    donutGrad.addColorStop(1, "#b06820");
+    ctx.fillStyle = donutGrad;
+    ctx.fill();
 
-      const fireGrad = ctx.createLinearGradient(rx, ry, rx, ry - flameHeight);
-      fireGrad.addColorStop(0, `rgba(255, 60, 0, ${0.7 + flicker * 0.3})`);
-      fireGrad.addColorStop(0.4, `rgba(255, 160, 0, ${0.5 + flicker * 0.3})`);
-      fireGrad.addColorStop(0.8, `rgba(255, 220, 50, ${0.3 + flicker * 0.2})`);
-      fireGrad.addColorStop(1, "rgba(255, 255, 100, 0)");
+    // Cut out the hole
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, innerR, innerR * 0.38, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
 
-      ctx.fillStyle = fireGrad;
-      ctx.beginPath();
-      const fw = 4 + flicker * 3;
-      ctx.moveTo(rx - fw / 2, ry);
-      ctx.quadraticCurveTo(rx - fw / 4, ry - flameHeight * 0.6, rx, ry - flameHeight);
-      ctx.quadraticCurveTo(rx + fw / 4, ry - flameHeight * 0.6, rx + fw / 2, ry);
-      ctx.closePath();
-      ctx.fill();
+    // Inner hole shadow/depth
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, innerR + 1, (innerR + 1) * 0.38, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(100, 50, 0, 0.5)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Pink frosting on top half
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 2, outerR - 2, (outerR - 2) * 0.36, 0, Math.PI, Math.PI * 2);
+    // Clip to donut shape
+    ctx.clip();
+
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 2, outerR - 2, (outerR - 2) * 0.36, 0, 0, Math.PI * 2);
+    const frostGrad = ctx.createLinearGradient(cx - outerR, cy, cx + outerR, cy);
+    frostGrad.addColorStop(0, "#ff88bb");
+    frostGrad.addColorStop(0.3, "#ff69b4");
+    frostGrad.addColorStop(0.7, "#ff5599");
+    frostGrad.addColorStop(1, "#ff88bb");
+    ctx.fillStyle = frostGrad;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Cut frosting hole
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, innerR - 1, (innerR - 1) * 0.38, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
+
+    // Sprinkles on top
+    const sprinkleColors = ["#ff3333", "#ffdd00", "#33cc33", "#3399ff", "#ff6600", "#cc33ff"];
+    const numSprinkles = 14;
+    for (let i = 0; i < numSprinkles; i++) {
+      const angle = (Math.PI * 2 * i) / numSprinkles + phase * 0.01;
+      const r = innerR + DONUT_TUBE * (0.3 + ((i * 7) % 5) / 10);
+      const sx = cx + Math.cos(angle) * r;
+      const sy = cy - 2 + Math.sin(angle) * r * 0.35;
+      // Only draw sprinkles on top half
+      if (Math.sin(angle) < 0.3) {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle + 0.5);
+        ctx.fillStyle = sprinkleColors[i % sprinkleColors.length];
+        ctx.fillRect(-4, -1.5, 8, 3);
+        ctx.restore();
+      }
     }
 
-    // Metal ring
-    ctx.strokeStyle = "#666";
-    ctx.lineWidth = 4;
+    // Shine highlight
+    ctx.save();
+    ctx.globalAlpha = 0.25;
     ctx.beginPath();
-    ctx.ellipse(hoop.x, rimY, HOOP_WIDTH / 2, HOOP_WIDTH * 0.18, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Hot metal effect
-    ctx.strokeStyle = "rgba(255, 100, 0, 0.6)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(hoop.x, rimY, HOOP_WIDTH / 2, HOOP_WIDTH * 0.18, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Rim circles (left and right)
-    ctx.beginPath();
-    ctx.arc(leftX, rimY, RIM_RADIUS, 0, Math.PI * 2);
-    const rimGrad = ctx.createRadialGradient(leftX, rimY, 0, leftX, rimY, RIM_RADIUS);
-    rimGrad.addColorStop(0, "#ff6600");
-    rimGrad.addColorStop(1, "#cc3300");
-    ctx.fillStyle = rimGrad;
+    ctx.ellipse(cx - outerR * 0.25, cy - outerR * 0.15, outerR * 0.3, outerR * 0.1, -0.3, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
     ctx.fill();
-    ctx.strokeStyle = "#992200";
+    ctx.restore();
+
+    // Outer edge definition
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, outerR, outerR * 0.38, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(120, 60, 0, 0.3)";
     ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(rightX, rimY, RIM_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = rimGrad;
-    ctx.fill();
-    ctx.strokeStyle = "#992200";
     ctx.stroke();
 
     // Score glow
     if (hoop.scored) {
       ctx.save();
-      ctx.globalAlpha = 0.2;
-      const scoreGrad = ctx.createRadialGradient(hoop.x, rimY, 0, hoop.x, rimY, HOOP_WIDTH * 0.8);
-      scoreGrad.addColorStop(0, "#ffdd00");
+      ctx.globalAlpha = 0.25;
+      const scoreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR * 1.2);
+      scoreGrad.addColorStop(0, "#ffdd57");
       scoreGrad.addColorStop(1, "transparent");
       ctx.fillStyle = scoreGrad;
       ctx.beginPath();
-      ctx.arc(hoop.x, rimY, HOOP_WIDTH * 0.8, 0, Math.PI * 2);
+      ctx.arc(cx, cy, outerR * 1.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -825,7 +874,7 @@
     }
 
     // Hoops
-    for (const hoop of hoops) drawFireHoop(hoop);
+    for (const hoop of hoops) drawDonut(hoop);
 
     // Particles
     for (const p of particles) {
