@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Flappy Dunk</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="flappy-dunk.css" />
+  </head>
+  <body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="overlay" id="startScreen">
+      <div class="panel">
+        <h1>Flappy Dunk</h1>
+        <p>Tap to flap. Dunk through the hoops!</p>
+        <button id="startButton">Play</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="gameOverScreen">
+      <div class="panel">
+        <h2>Game Over</h2>
+        <p id="finalScoreText"></p>
+        <p id="bestScoreText"></p>
+        <button id="restartButton">Play Again</button>
+      </div>
+    </div>
+
+    <script src="flappy-dunk.js"></script>
+  </body>
+</html>
