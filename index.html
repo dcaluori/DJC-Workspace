@@ -111,9 +111,10 @@ button:active {
   const GRAVITY = 0.28;
   const FLAP_STRENGTH = -6;
   const BALL_RADIUS = 16;
-  const HOLE_RADIUS = BALL_RADIUS * 3; // big hole - easy to fly through
-  const DONUT_TUBE = 8;
-  const RIM_COLLISION = 4;
+  const DONUT_TUBE = 14; // thick visual ring
+  const HOLE_RADIUS = BALL_RADIUS * 2; // visual inner hole
+  const OUTER_RADIUS = HOLE_RADIUS + DONUT_TUBE; // outer edge of donut
+  const RIM_COLLISION = 4; // collision only at outer edge
   const HOOP_SPEED_BASE = 2.2;
 
   // ─── State ───
@@ -364,18 +365,19 @@ button:active {
     }
 
     for (const hoop of hoops) {
-      const rimLeftX = hoop.x - HOLE_RADIUS;
-      const rimRightX = hoop.x + HOLE_RADIUS;
+      // Collision at OUTER edge of donut - entire hole + ring is passable
+      const rimLeftX = hoop.x - OUTER_RADIUS;
+      const rimRightX = hoop.x + OUTER_RADIUS;
       const rimY = hoop.centerY;
       const inHoopX = ball.x > rimLeftX + RIM_COLLISION && ball.x < rimRightX - RIM_COLLISION;
 
       if (!hoop.scored) {
-        const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - DONUT_TUBE * 2 &&
-                          ball.x - BALL_RADIUS < rimRightX + DONUT_TUBE * 2;
-        const nearHoopY = Math.abs(ball.y - rimY) < BALL_RADIUS + DONUT_TUBE;
+        const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - RIM_COLLISION * 2 &&
+                          ball.x - BALL_RADIUS < rimRightX + RIM_COLLISION * 2;
+        const nearHoopY = Math.abs(ball.y - rimY) < BALL_RADIUS + RIM_COLLISION * 2;
 
         if (nearHoopX && nearHoopY) {
-          // Left rim collision
+          // Left outer edge collision
           const dxL = ball.x - rimLeftX;
           const dyL = ball.y - rimY;
           const distL = Math.sqrt(dxL * dxL + dyL * dyL);
@@ -384,7 +386,7 @@ button:active {
             continue;
           }
 
-          // Right rim collision
+          // Right outer edge collision
           const dxR = ball.x - rimRightX;
           const dyR = ball.y - rimY;
           const distR = Math.sqrt(dxR * dxR + dyR * dyR);
@@ -395,7 +397,7 @@ button:active {
         }
       }
 
-      // Scoring - swept detection for high-speed dunks
+      // Scoring - ball passes through donut center
       if (!hoop.scored && inHoopX) {
         const prevY = ball.y - ball.vy;
         if ((prevY <= rimY && ball.y >= rimY) || (ball.y > rimY - 8 && ball.y < rimY + 35 && ball.vy > 0)) {
@@ -432,7 +434,7 @@ button:active {
 
     for (const hoop of hoops) { hoop.x -= scrollSpeed; hoop.phase += 0.08; }
 
-    if (hoops.length > 0 && hoops[0].x < -(HOLE_RADIUS + DONUT_TUBE) * 2) {
+    if (hoops.length > 0 && hoops[0].x < -OUTER_RADIUS * 2) {
       hoops.shift();
       const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
       spawnHoop(lastX + w * 0.4 + Math.random() * w * 0.08);
