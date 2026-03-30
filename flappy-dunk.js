@@ -104,7 +104,7 @@
     waveOffset = 0;
     missedHoops = 0;
     hoopsSinceStack = 0;
-    nextStackAt = 10 + Math.floor(Math.random() * 11); // 10-20
+    nextStackAt = 10 + Math.floor(Math.random() * 3); // 10-12
 
     for (let i = 0; i < 4; i++) spawnHoop(w + i * (w * 0.42));
   }
@@ -120,10 +120,10 @@
   }
 
   function spawnStack(x) {
-    const count = 3 + Math.floor(Math.random() * 4); // 3-6 hoops
-    const spacing = (OUTER_RADIUS * 2 + BALL_RADIUS * 2); // vertical gap between hoops
+    const count = 2 + Math.floor(Math.random() * 2); // 2-3 hoops
+    const spacing = OUTER_RADIUS * 2 + BALL_RADIUS; // tight vertical gap
     const totalHeight = (count - 1) * spacing;
-    const topY = Math.max(h * 0.15, h * 0.45 - totalHeight / 2);
+    const topY = Math.max(h * 0.18, h * 0.4 - totalHeight / 2);
     for (let i = 0; i < count; i++) {
       hoops.push({
         x, centerY: topY + i * spacing,
@@ -213,7 +213,6 @@
       });
     }
 
-    scrollSpeed = HOOP_SPEED_BASE + Math.floor(score / 8) * 0.3;
   }
 
   // ─── Death ───
