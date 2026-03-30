@@ -12,9 +12,10 @@
   // ─── Constants ───
   const GRAVITY = 0.28;
   const FLAP_STRENGTH = -6;
-  const BALL_RADIUS = 20;
-  const HOLE_RADIUS = BALL_RADIUS * 1.5;
-  const DONUT_TUBE = 12;
+  const BALL_RADIUS = 18;
+  const HOLE_RADIUS = BALL_RADIUS * 2.0; // hole diameter = 2x ball diameter
+  const DONUT_TUBE = 10; // visual thickness of donut ring
+  const RIM_COLLISION = 5; // collision thickness (smaller than visual)
   const HOOP_SPEED_BASE = 2.2;
 
   // ─── State ───
@@ -219,7 +220,7 @@
 
     const nx = dx / dist;
     const ny = dy / dist;
-    const overlap = (BALL_RADIUS + DONUT_TUBE) - dist;
+    const overlap = (BALL_RADIUS + RIM_COLLISION) - dist;
     ball.x += nx * overlap;
     ball.y += ny * overlap;
 
@@ -268,45 +269,30 @@
       const rimLeftX = hoop.x - HOLE_RADIUS;
       const rimRightX = hoop.x + HOLE_RADIUS;
       const rimY = hoop.centerY;
-      const inHoopX = ball.x > rimLeftX + DONUT_TUBE * 0.5 && ball.x < rimRightX - DONUT_TUBE * 0.5;
+      const inHoopX = ball.x > rimLeftX + RIM_COLLISION && ball.x < rimRightX - RIM_COLLISION;
 
       if (!hoop.scored) {
         const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - DONUT_TUBE * 2 &&
                           ball.x - BALL_RADIUS < rimRightX + DONUT_TUBE * 2;
+        const nearHoopY = Math.abs(ball.y - rimY) < BALL_RADIUS + DONUT_TUBE;
 
-        if (nearHoopX) {
+        if (nearHoopX && nearHoopY) {
+          // Left rim collision
           const dxL = ball.x - rimLeftX;
           const dyL = ball.y - rimY;
           const distL = Math.sqrt(dxL * dxL + dyL * dyL);
-          if (distL < BALL_RADIUS + DONUT_TUBE) {
+          if (distL < BALL_RADIUS + RIM_COLLISION) {
             bounceOffRim(rimLeftX, rimY, hoop);
             continue;
           }
 
+          // Right rim collision
           const dxR = ball.x - rimRightX;
           const dyR = ball.y - rimY;
           const distR = Math.sqrt(dxR * dxR + dyR * dyR);
-          if (distR < BALL_RADIUS + DONUT_TUBE) {
+          if (distR < BALL_RADIUS + RIM_COLLISION) {
             bounceOffRim(rimRightX, rimY, hoop);
             continue;
-          }
-
-          if (!inHoopX) {
-            const dxC = ball.x - hoop.x;
-            const dyC = ball.y - rimY;
-            const distC = Math.sqrt(dxC * dxC + dyC * dyC);
-            const outerR = HOLE_RADIUS + DONUT_TUBE;
-            if (distC < BALL_RADIUS + outerR && distC > HOLE_RADIUS - DONUT_TUBE && distC > 0) {
-              const nx = dxC / distC;
-              const ny = dyC / distC;
-              ball.x = hoop.x + nx * (BALL_RADIUS + outerR);
-              ball.y = rimY + ny * (BALL_RADIUS + outerR);
-              const dot = ball.vx * nx + ball.vy * ny;
-              ball.vx = (ball.vx - 2 * dot * nx) * 0.5;
-              ball.vy = (ball.vy - 2 * dot * ny) * 0.5;
-              hoop.touchedRim = true;
-              cleanStreak = 0;
-            }
           }
         }
       }
