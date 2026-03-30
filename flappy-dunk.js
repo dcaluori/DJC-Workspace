@@ -33,6 +33,9 @@
   let clouds;
   let palmTrees;
   let deathTimeout;
+  let missedHoops;
+  let hoopsSinceStack;
+  let nextStackAt;
 
   // ─── Resize ───
   function resize() {
@@ -93,6 +96,9 @@
     shakeTimer = 0;
     flashAlpha = 0;
     waveOffset = 0;
+    missedHoops = 0;
+    hoopsSinceStack = 0;
+    nextStackAt = 10 + Math.floor(Math.random() * 11); // 10-20
 
     for (let i = 0; i < 4; i++) spawnHoop(w + i * (w * 0.42));
   }
@@ -105,6 +111,31 @@
       x, centerY, scored: false, touchedRim: false,
       phase: Math.random() * Math.PI * 2,
     });
+  }
+
+  function spawnStack(x) {
+    const count = 3 + Math.floor(Math.random() * 4); // 3-6 hoops
+    const spacing = (OUTER_RADIUS * 2 + BALL_RADIUS * 2); // vertical gap between hoops
+    const totalHeight = (count - 1) * spacing;
+    const topY = Math.max(h * 0.15, h * 0.45 - totalHeight / 2);
+    for (let i = 0; i < count; i++) {
+      hoops.push({
+        x, centerY: topY + i * spacing,
+        scored: false, touchedRim: false,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  function maybeSpawn(lastX) {
+    const nextX = lastX + w * 0.4 + Math.random() * w * 0.08;
+    if (hoopsSinceStack >= nextStackAt) {
+      spawnStack(nextX);
+      hoopsSinceStack = 0;
+      nextStackAt = 10 + Math.floor(Math.random() * 11);
+    } else {
+      spawnHoop(nextX);
+    }
   }
 
   // ─── Flap ───
@@ -299,11 +330,12 @@
         }
       }
 
-      // Scoring - ball passes through donut center
-      if (!hoop.scored && inHoopX) {
+      // Scoring - only counts for top-down passes (ball falling through)
+      if (!hoop.scored && inHoopX && ball.vy > 0) {
         const prevY = ball.y - ball.vy;
-        if ((prevY <= rimY && ball.y >= rimY) || (ball.y > rimY - 8 && ball.y < rimY + 35 && ball.vy > 0)) {
+        if (prevY <= rimY && ball.y >= rimY) {
           hoop.scored = true;
+          hoopsSinceStack++;
           scoreDunk(hoop);
         }
       }
@@ -336,14 +368,19 @@
 
     for (const hoop of hoops) { hoop.x -= scrollSpeed; hoop.phase += 0.08; }
 
-    if (hoops.length > 0 && hoops[0].x < -OUTER_RADIUS * 2) {
-      hoops.shift();
+    // Remove off-screen hoops and track misses
+    while (hoops.length > 0 && hoops[0].x < -OUTER_RADIUS * 2) {
+      const removed = hoops.shift();
+      if (!removed.scored) {
+        missedHoops++;
+        if (missedHoops >= 3) { die(); return; }
+      }
       const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
-      spawnHoop(lastX + w * 0.4 + Math.random() * w * 0.08);
+      maybeSpawn(lastX);
     }
     while (hoops.length < 5) {
       const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
-      spawnHoop(lastX + w * 0.4 + Math.random() * w * 0.08);
+      maybeSpawn(lastX);
     }
 
     checkCollisions();
@@ -586,6 +623,21 @@
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 8;
     ctx.fillText(displayScore, w / 2, 40); ctx.restore();
+
+    // Miss indicators (3 donuts, X'd out when missed)
+    ctx.save(); ctx.font = "22px system-ui"; ctx.textBaseline = "top";
+    for (let i = 0; i < 3; i++) {
+      const mx = 20 + i * 30;
+      const my = 44;
+      if (i < missedHoops) {
+        ctx.fillStyle = "rgba(255,80,80,0.9)";
+        ctx.fillText("\u2718", mx, my);
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.fillText("\uD83C\uDF69", mx, my);
+      }
+    }
+    ctx.restore();
 
     if (cleanStreak > 1) {
       ctx.save(); ctx.fillStyle = "#ff6600";
