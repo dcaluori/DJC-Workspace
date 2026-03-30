@@ -99,7 +99,6 @@ button:active {
   </head>
   <body>
     <canvas id="gameCanvas"></canvas>
-
     <div class="overlay" id="startScreen">
       <div class="panel">
         <h1>Beach Ball Blaze</h1>
@@ -107,7 +106,6 @@ button:active {
         <button id="startButton">Play</button>
       </div>
     </div>
-
     <div class="overlay hidden" id="gameOverScreen">
       <div class="panel">
         <h2>Game Over</h2>
@@ -116,7 +114,6 @@ button:active {
         <button id="restartButton">Play Again</button>
       </div>
     </div>
-
     <script>
 (() => {
   "use strict";
@@ -128,6 +125,12 @@ button:active {
   const gameOverScreen = document.getElementById("gameOverScreen");
   const finalScoreText = document.getElementById("finalScoreText");
   const bestScoreText = document.getElementById("bestScoreText");
+
+  // ─── Sprite images ───
+  const ballImg = new Image();
+  ballImg.src = "data:image/png;base64,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";
+  const donutImg = new Image();
+  donutImg.src = "data:image/png;base64,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";
 
   // ─── Constants ───
   const GRAVITY = 0.28;
@@ -623,119 +626,32 @@ button:active {
   }
 
   function drawBeachBall() {
+    const spriteSize = BALL_RADIUS * 2.4;
     ctx.save();
     ctx.translate(ball.x, ball.y);
     ctx.rotate(ball.rotation);
-
-    ctx.beginPath(); ctx.arc(2, 3, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fill();
-
-    ctx.beginPath(); ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff"; ctx.fill();
-
-    const stripeColors = ["#ff3333", "#ffcc00", "#3399ff", "#ff3333", "#33cc33", "#ff6600"];
-    for (let i = 0; i < 6; i++) {
-      const startAngle = (Math.PI * 2 * i) / 6;
-      const endAngle = startAngle + Math.PI / 6;
-      ctx.beginPath(); ctx.moveTo(0, 0);
-      ctx.arc(0, 0, BALL_RADIUS, startAngle, endAngle);
-      ctx.closePath(); ctx.fillStyle = stripeColors[i]; ctx.fill();
-    }
-
-    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI * 2 * i) / 6;
-      ctx.beginPath(); ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(angle) * BALL_RADIUS, Math.sin(angle) * BALL_RADIUS); ctx.stroke();
-    }
-
-    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
-    ctx.beginPath(); ctx.arc(-5, -7, 6, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fill();
-    ctx.beginPath(); ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.lineWidth = 1; ctx.stroke();
-
+    ctx.drawImage(ballImg, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
     ctx.restore();
   }
 
-  // ─── Donut drawing using ring path (no destination-out!) ───
+  // ─── Donut drawing using sprite image ───
   function drawDonut(hoop) {
     const cx = hoop.x, cy = hoop.centerY;
     const outerR = HOLE_RADIUS + DONUT_TUBE;
-    const innerR = HOLE_RADIUS;
-    const squash = 0.55;
+    const spriteSize = outerR * 2.3;
 
-    // Shadow
-    ctx.save(); ctx.globalAlpha = 0.2;
-    ctx.beginPath(); ctx.ellipse(cx + 3, cy + 4, outerR, outerR * squash, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#000"; ctx.fill(); ctx.restore();
-
-    // Donut body as a ring path (outer clockwise, inner counter-clockwise)
     ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, outerR, outerR * squash, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx, cy, innerR, innerR * squash, 0, 0, Math.PI * 2, true);
-    const donutGrad = ctx.createRadialGradient(cx - 5, cy - 5, innerR * 0.3, cx, cy, outerR);
-    donutGrad.addColorStop(0, "#e8a840");
-    donutGrad.addColorStop(0.5, "#d4882a");
-    donutGrad.addColorStop(1, "#b06820");
-    ctx.fillStyle = donutGrad;
-    ctx.fill();
-    ctx.restore();
-
-    // Inner hole edge shadow
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, innerR + 1, (innerR + 1) * squash, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(100,50,0,0.5)"; ctx.lineWidth = 3; ctx.stroke();
-
-    // Pink frosting on top (clip to ring shape)
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 2, outerR - 1, (outerR - 1) * squash, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx, cy - 2, innerR + 1, (innerR + 1) * squash, 0, 0, Math.PI * 2, true);
-    ctx.clip();
-
-    // Only fill top half
-    const frostGrad = ctx.createLinearGradient(cx - outerR, cy, cx + outerR, cy);
-    frostGrad.addColorStop(0, "#ff88bb");
-    frostGrad.addColorStop(0.3, "#ff69b4");
-    frostGrad.addColorStop(0.7, "#ff5599");
-    frostGrad.addColorStop(1, "#ff88bb");
-    ctx.fillStyle = frostGrad;
-    ctx.fillRect(cx - outerR - 2, cy - outerR * squash - 10, (outerR + 2) * 2, outerR * squash + 8);
-    ctx.restore();
-
-    // Sprinkles
-    const sprinkleColors = ["#ff3333", "#ffdd00", "#33cc33", "#3399ff", "#ff6600", "#cc33ff"];
-    for (let i = 0; i < 14; i++) {
-      const angle = (Math.PI * 2 * i) / 14 + hoop.phase * 0.01;
-      const r = innerR + DONUT_TUBE * (0.3 + ((i * 7) % 5) / 10);
-      const sx = cx + Math.cos(angle) * r;
-      const sy = cy - 2 + Math.sin(angle) * r * squash;
-      if (Math.sin(angle) < 0.3) {
-        ctx.save(); ctx.translate(sx, sy); ctx.rotate(angle + 0.5);
-        ctx.fillStyle = sprinkleColors[i % sprinkleColors.length];
-        ctx.fillRect(-4, -1.5, 8, 3); ctx.restore();
-      }
-    }
-
-    // Shine
-    ctx.save(); ctx.globalAlpha = 0.25;
-    ctx.beginPath(); ctx.ellipse(cx - outerR * 0.25, cy - outerR * 0.15, outerR * 0.3, outerR * 0.1, -0.3, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff"; ctx.fill(); ctx.restore();
-
-    // Outer edge
-    ctx.beginPath(); ctx.ellipse(cx, cy, outerR, outerR * squash, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(120,60,0,0.3)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.drawImage(donutImg, cx - spriteSize / 2, cy - spriteSize / 2, spriteSize, spriteSize);
 
     // Score glow
     if (hoop.scored) {
-      ctx.save(); ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = 0.25;
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR * 1.2);
       g.addColorStop(0, "#ffdd57"); g.addColorStop(1, "transparent");
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(cx, cy, outerR * 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
     }
+    ctx.restore();
   }
 
   function drawUI() {
