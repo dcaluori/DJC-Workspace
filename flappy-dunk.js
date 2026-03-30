@@ -4,57 +4,86 @@
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
 
-  // ─── Screens ───
   const startScreen = document.getElementById("startScreen");
   const gameOverScreen = document.getElementById("gameOverScreen");
   const finalScoreText = document.getElementById("finalScoreText");
   const bestScoreText = document.getElementById("bestScoreText");
 
   // ─── Constants ───
-  const GRAVITY = 0.45;
-  const FLAP_STRENGTH = -8;
+  const GRAVITY = 0.28;
+  const FLAP_STRENGTH = -6;
   const BALL_RADIUS = 18;
-  const HOOP_GAP = 160;
-  const HOOP_WIDTH = 70;
-  const HOOP_SPEED_BASE = 3;
-  const RIM_RADIUS = 6;
-  const NET_DEPTH = 30;
+  const HOLE_RADIUS = BALL_RADIUS * 2.0; // hole diameter = 2x ball diameter
+  const DONUT_TUBE = 10; // visual thickness of donut ring
+  const RIM_COLLISION = 5; // collision thickness (smaller than visual)
+  const HOOP_SPEED_BASE = 2.2;
 
   // ─── State ───
   let w, h;
   let ball, hoops, particles, trailParticles;
-  let score, bestScore, scrollSpeed;
+  let score, bestScore, scrollSpeed, displayScore;
   let running, dead, started;
   let frameId;
-  let combo;
+  let cleanStreak;
   let screenShake, shakeTimer;
   let flashAlpha;
+  let multiplierPopups;
+  let waveOffset;
+  let clouds;
+  let palmTrees;
+  let deathTimeout;
 
   // ─── Resize ───
   function resize() {
     w = canvas.width = window.innerWidth;
     h = canvas.height = window.innerHeight;
+    generateScenery();
   }
   window.addEventListener("resize", resize);
   resize();
 
-  // ─── Best score persistence ───
   bestScore = parseInt(localStorage.getItem("flappyDunkBest") || "0", 10);
+
+  // ─── Scenery generation ───
+  function generateScenery() {
+    clouds = [];
+    for (let i = 0; i < 8; i++) {
+      clouds.push({
+        x: Math.random() * w * 1.5,
+        y: h * 0.05 + Math.random() * h * 0.25,
+        width: 60 + Math.random() * 100,
+        height: 25 + Math.random() * 30,
+        speed: 0.2 + Math.random() * 0.3,
+      });
+    }
+    palmTrees = [];
+    for (let i = 0; i < 6; i++) {
+      palmTrees.push({
+        x: w * 0.1 + (i / 5) * w * 0.85,
+        height: 80 + Math.random() * 60,
+        lean: (Math.random() - 0.5) * 0.3,
+        frondAlphas: Array.from({ length: 8 }, () => 0.6 + Math.random() * 0.3),
+      });
+    }
+  }
 
   // ─── Init ───
   function init() {
+    cancelAnimationFrame(frameId);
+    if (deathTimeout) clearTimeout(deathTimeout);
+
     ball = {
-      x: w * 0.25,
-      y: h * 0.4,
-      vy: 0,
-      rotation: 0,
-      rotationSpeed: 0,
+      x: w * 0.25, y: h * 0.4,
+      vx: 0, vy: 0,
+      rotation: 0, rotationSpeed: 0,
     };
     hoops = [];
     particles = [];
     trailParticles = [];
+    multiplierPopups = [];
     score = 0;
-    combo = 0;
+    displayScore = 0;
+    cleanStreak = 0;
     scrollSpeed = HOOP_SPEED_BASE;
     running = false;
     dead = false;
@@ -62,192 +91,219 @@
     screenShake = 0;
     shakeTimer = 0;
     flashAlpha = 0;
+    waveOffset = 0;
 
-    // Seed initial hoops
-    for (let i = 0; i < 4; i++) {
-      spawnHoop(w + i * (w * 0.42));
-    }
+    for (let i = 0; i < 4; i++) spawnHoop(w + i * (w * 0.42));
   }
 
   function spawnHoop(x) {
-    const minY = h * 0.2 + HOOP_GAP / 2;
-    const maxY = h * 0.8 - HOOP_GAP / 2;
+    const minY = h * 0.22;
+    const maxY = h * 0.65;
     const centerY = minY + Math.random() * (maxY - minY);
     hoops.push({
-      x,
-      centerY,
-      scored: false,
-      rimHitLeft: false,
-      rimHitRight: false,
+      x, centerY, scored: false, touchedRim: false,
+      phase: Math.random() * Math.PI * 2,
     });
   }
 
   // ─── Flap ───
   function flap() {
     if (dead) return;
-    if (!started) {
-      started = true;
-      running = true;
-    }
+    if (!started) { started = true; running = true; }
     ball.vy = FLAP_STRENGTH;
-    ball.rotationSpeed = -0.3;
+    ball.rotationSpeed = -0.25;
 
-    // Flap particles
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       particles.push({
-        x: ball.x,
-        y: ball.y + BALL_RADIUS,
-        vx: (Math.random() - 0.5) * 3,
-        vy: Math.random() * 2 + 1,
-        life: 1,
-        decay: 0.03 + Math.random() * 0.02,
+        x: ball.x, y: ball.y + BALL_RADIUS,
+        vx: (Math.random() - 0.5) * 2, vy: Math.random() * 1.5 + 0.5,
+        life: 1, decay: 0.03 + Math.random() * 0.02,
         radius: 2 + Math.random() * 3,
-        color: `hsl(${30 + Math.random() * 20}, 90%, 60%)`,
+        color: "hsla(195, 80%, 70%, 0.8)",
       });
     }
   }
 
   // ─── Input ───
-  canvas.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    flap();
-  });
-
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); flap(); });
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" || e.code === "ArrowUp") {
-      e.preventDefault();
-      flap();
-    }
+    if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); flap(); }
   });
 
-  document.getElementById("startButton").addEventListener("click", () => {
+  document.getElementById("startButton").addEventListener("click", (e) => {
+    e.stopPropagation();
     startScreen.classList.add("hidden");
-    init();
-    loop();
+    init(); loop();
   });
-
-  document.getElementById("restartButton").addEventListener("click", () => {
+  document.getElementById("restartButton").addEventListener("click", (e) => {
+    e.stopPropagation();
     gameOverScreen.classList.add("hidden");
-    init();
-    loop();
+    init(); loop();
   });
 
-  // ─── Dunk scoring effect ───
+  // ─── Dunk scoring ───
   function scoreDunk(hoop) {
-    score++;
-    combo++;
-    flashAlpha = 0.3;
+    const clean = !hoop.touchedRim;
+    if (clean) {
+      cleanStreak++;
+      const multiplier = Math.min(Math.pow(2, cleanStreak - 1), 64);
+      score += multiplier;
+      flashAlpha = 0.25;
 
-    // Confetti burst
-    const colors = ["#ff6b35", "#e94560", "#ffdd57", "#48dbfb", "#0abde3", "#ff9ff3"];
-    for (let i = 0; i < 15; i++) {
-      const angle = (Math.PI * 2 * i) / 15;
-      const speed = 2 + Math.random() * 4;
+      if (cleanStreak > 1) {
+        multiplierPopups.push({
+          x: w / 2, y: h * 0.18,
+          text: "x" + multiplier,
+          life: 1, vy: -1,
+        });
+      }
+    } else {
+      cleanStreak = 0;
+      score += 1;
+    }
+
+    const colors = ["#ff69b4", "#ffdd00", "#33cc33", "#3399ff", "#ff6633", "#cc33ff"];
+    for (let i = 0; i < 12; i++) {
+      const angle = (Math.PI * 2 * i) / 12;
+      const speed = 2 + Math.random() * 3;
       particles.push({
-        x: hoop.x,
-        y: hoop.centerY,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 2,
-        life: 1,
-        decay: 0.015 + Math.random() * 0.01,
+        x: hoop.x, y: hoop.centerY,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2,
+        life: 1, decay: 0.02 + Math.random() * 0.01,
         radius: 3 + Math.random() * 4,
         color: colors[Math.floor(Math.random() * colors.length)],
       });
     }
 
-    // Increase speed every 5 points
-    scrollSpeed = HOOP_SPEED_BASE + Math.floor(score / 5) * 0.5;
+    scrollSpeed = HOOP_SPEED_BASE + Math.floor(score / 8) * 0.3;
   }
 
   // ─── Death ───
   function die() {
     if (dead) return;
-    dead = true;
-    running = false;
-    screenShake = 8;
-    shakeTimer = 15;
+    dead = true; running = false;
+    screenShake = 8; shakeTimer = 15;
 
     if (score > bestScore) {
       bestScore = score;
       localStorage.setItem("flappyDunkBest", bestScore.toString());
     }
 
-    // Death particles
-    for (let i = 0; i < 20; i++) {
-      const angle = (Math.PI * 2 * i) / 20;
-      const speed = 2 + Math.random() * 3;
+    for (let i = 0; i < 15; i++) {
+      const angle = (Math.PI * 2 * i) / 15;
+      const speed = 1.5 + Math.random() * 2;
       particles.push({
-        x: ball.x,
-        y: ball.y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
-        decay: 0.02,
-        radius: 3 + Math.random() * 4,
-        color: `hsl(${10 + Math.random() * 30}, 80%, 55%)`,
+        x: ball.x, y: ball.y,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 1, decay: 0.02, radius: 3 + Math.random() * 4,
+        color: "hsl(" + (190 + Math.random() * 30) + ", 70%, 60%)",
       });
     }
 
-    setTimeout(() => {
-      finalScoreText.textContent = `Score: ${score}`;
-      bestScoreText.textContent = `Best: ${bestScore}`;
+    deathTimeout = setTimeout(() => {
+      if (!dead) return;
+      finalScoreText.textContent = "Score: " + score;
+      bestScoreText.textContent = "Best: " + bestScore;
+      if (score > 0 && score >= bestScore) {
+        bestScoreText.textContent += " ★ NEW BEST!";
+      }
       gameOverScreen.classList.remove("hidden");
     }, 800);
   }
 
+  // ─── Rim bounce ───
+  function bounceOffRim(rimX, rimY, hoop) {
+    const dx = ball.x - rimX;
+    const dy = ball.y - rimY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) return;
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const overlap = (BALL_RADIUS + RIM_COLLISION) - dist;
+    ball.x += nx * overlap;
+    ball.y += ny * overlap;
+
+    const dot = ball.vx * nx + ball.vy * ny;
+    ball.vx = (ball.vx - 2 * dot * nx) * 0.55;
+    ball.vy = (ball.vy - 2 * dot * ny) * 0.55;
+
+    ball.vx += (hoop.x - ball.x) * 0.012;
+    if (ball.y < rimY && ball.vy > 0) ball.vy *= 0.7;
+
+    ball.rotationSpeed = (Math.random() - 0.5) * 0.4;
+    hoop.touchedRim = true;
+    cleanStreak = 0;
+
+    const sprinkleColors = ["#ff69b4", "#ff1493", "#ffdd57", "#44dd44", "#44bbff", "#ff6633"];
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: rimX + nx * DONUT_TUBE, y: rimY + ny * DONUT_TUBE,
+        vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4 - 1,
+        life: 1, decay: 0.035, radius: 2 + Math.random() * 2,
+        color: sprinkleColors[Math.floor(Math.random() * sprinkleColors.length)],
+      });
+    }
+  }
+
   // ─── Collision ───
   function checkCollisions() {
-    // Floor / ceiling
-    if (ball.y - BALL_RADIUS < 0 || ball.y + BALL_RADIUS > h) {
+    if (ball.y - BALL_RADIUS < 0) {
+      ball.y = BALL_RADIUS;
+      ball.vy = Math.abs(ball.vy) * 0.3;
+    }
+    if (ball.y + BALL_RADIUS > h * 0.82) {
       die();
+      for (let i = 0; i < 10; i++) {
+        particles.push({
+          x: ball.x + (Math.random() - 0.5) * 30, y: h * 0.82,
+          vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 5 - 2,
+          life: 1, decay: 0.025, radius: 3 + Math.random() * 4,
+          color: "hsla(195, 80%, 65%, 0.8)",
+        });
+      }
       return;
     }
 
     for (const hoop of hoops) {
-      const rimLeftX = hoop.x - HOOP_WIDTH / 2;
-      const rimRightX = hoop.x + HOOP_WIDTH / 2;
+      const rimLeftX = hoop.x - HOLE_RADIUS;
+      const rimRightX = hoop.x + HOLE_RADIUS;
       const rimY = hoop.centerY;
+      const inHoopX = ball.x > rimLeftX + RIM_COLLISION && ball.x < rimRightX - RIM_COLLISION;
 
-      // Check if ball is passing through the hoop zone
-      const inHoopX = ball.x > rimLeftX + RIM_RADIUS && ball.x < rimRightX - RIM_RADIUS;
-      const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - RIM_RADIUS &&
-                        ball.x - BALL_RADIUS < rimRightX + RIM_RADIUS;
+      if (!hoop.scored) {
+        const nearHoopX = ball.x + BALL_RADIUS > rimLeftX - DONUT_TUBE * 2 &&
+                          ball.x - BALL_RADIUS < rimRightX + DONUT_TUBE * 2;
+        const nearHoopY = Math.abs(ball.y - rimY) < BALL_RADIUS + DONUT_TUBE;
 
-      if (nearHoopX) {
-        // Rim collision (left)
-        const dxL = ball.x - rimLeftX;
-        const dyL = ball.y - rimY;
-        const distL = Math.sqrt(dxL * dxL + dyL * dyL);
-        if (distL < BALL_RADIUS + RIM_RADIUS) {
-          die();
-          return;
-        }
+        if (nearHoopX && nearHoopY) {
+          // Left rim collision
+          const dxL = ball.x - rimLeftX;
+          const dyL = ball.y - rimY;
+          const distL = Math.sqrt(dxL * dxL + dyL * dyL);
+          if (distL < BALL_RADIUS + RIM_COLLISION) {
+            bounceOffRim(rimLeftX, rimY, hoop);
+            continue;
+          }
 
-        // Rim collision (right)
-        const dxR = ball.x - rimRightX;
-        const dyR = ball.y - rimY;
-        const distR = Math.sqrt(dxR * dxR + dyR * dyR);
-        if (distR < BALL_RADIUS + RIM_RADIUS) {
-          die();
-          return;
-        }
-
-        // Backboard (vertical bar above and below the gap)
-        const backboardX = rimRightX + HOOP_WIDTH * 0.15;
-        if (ball.x + BALL_RADIUS > backboardX - 4 && ball.x - BALL_RADIUS < backboardX + 4) {
-          const aboveRim = ball.y < rimY - HOOP_GAP * 0.05;
-          const belowRim = ball.y > rimY + HOOP_GAP * 0.05;
-          if (aboveRim || belowRim) {
-            die();
-            return;
+          // Right rim collision
+          const dxR = ball.x - rimRightX;
+          const dyR = ball.y - rimY;
+          const distR = Math.sqrt(dxR * dxR + dyR * dyR);
+          if (distR < BALL_RADIUS + RIM_COLLISION) {
+            bounceOffRim(rimRightX, rimY, hoop);
+            continue;
           }
         }
       }
 
-      // Scoring - ball passes through hoop center going downward
-      if (!hoop.scored && inHoopX && ball.y > rimY - 5 && ball.y < rimY + 25 && ball.vy > 0) {
-        hoop.scored = true;
-        scoreDunk(hoop);
+      // Scoring - swept detection for high-speed dunks
+      if (!hoop.scored && inHoopX) {
+        const prevY = ball.y - ball.vy;
+        if ((prevY <= rimY && ball.y >= rimY) || (ball.y > rimY - 8 && ball.y < rimY + 35 && ball.vy > 0)) {
+          hoop.scored = true;
+          scoreDunk(hoop);
+        }
       }
     }
   }
@@ -257,341 +313,326 @@
     if (!running && started) return;
     if (!started) return;
 
-    // Ball physics
-    ball.vy += GRAVITY;
-    ball.y += ball.vy;
-    ball.rotation += ball.rotationSpeed;
-    ball.rotationSpeed *= 0.98;
-    ball.rotationSpeed += 0.02; // spin forward from falling
+    waveOffset += 0.02;
 
-    // Trail
-    if (Math.abs(ball.vy) > 2) {
+    ball.vy += GRAVITY;
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    ball.vx *= 0.98;
+    ball.rotation += ball.rotationSpeed;
+    ball.rotationSpeed *= 0.97;
+    ball.rotationSpeed += 0.015;
+
+    if (ball.x - BALL_RADIUS < 0) { ball.x = BALL_RADIUS; ball.vx = Math.abs(ball.vx) * 0.5; }
+    if (ball.x + BALL_RADIUS > w) { ball.x = w - BALL_RADIUS; ball.vx = -Math.abs(ball.vx) * 0.5; }
+
+    if (Math.abs(ball.vy) > 1.5) {
       trailParticles.push({
-        x: ball.x,
-        y: ball.y,
-        life: 1,
-        decay: 0.06,
-        radius: BALL_RADIUS * 0.6,
+        x: ball.x, y: ball.y, life: 1, decay: 0.05, radius: BALL_RADIUS * 0.5,
       });
     }
 
-    // Move hoops
-    for (const hoop of hoops) {
-      hoop.x -= scrollSpeed;
-    }
+    for (const hoop of hoops) { hoop.x -= scrollSpeed; hoop.phase += 0.08; }
 
-    // Remove off-screen hoops, spawn new ones
-    if (hoops.length > 0 && hoops[0].x < -HOOP_WIDTH * 2) {
+    if (hoops.length > 0 && hoops[0].x < -(HOLE_RADIUS + DONUT_TUBE) * 2) {
       hoops.shift();
       const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
-      spawnHoop(lastX + w * 0.38 + Math.random() * w * 0.08);
+      spawnHoop(lastX + w * 0.4 + Math.random() * w * 0.08);
     }
-
-    // Ensure we always have enough hoops ahead
     while (hoops.length < 5) {
       const lastX = hoops.length > 0 ? hoops[hoops.length - 1].x : w;
-      spawnHoop(lastX + w * 0.38 + Math.random() * w * 0.08);
+      spawnHoop(lastX + w * 0.4 + Math.random() * w * 0.08);
     }
 
     checkCollisions();
 
-    // Update particles
+    for (const cloud of clouds) {
+      cloud.x -= cloud.speed;
+      if (cloud.x + cloud.width < 0) { cloud.x = w + cloud.width; cloud.y = h * 0.05 + Math.random() * h * 0.25; }
+    }
+
     for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.1;
-      p.life -= p.decay;
-      if (p.life <= 0) particles.splice(i, 1);
+      const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= p.decay;
+      if (p.life <= 0) { particles[i] = particles[particles.length - 1]; particles.pop(); }
     }
-
     for (let i = trailParticles.length - 1; i >= 0; i--) {
-      const t = trailParticles[i];
-      t.life -= t.decay;
-      if (t.life <= 0) trailParticles.splice(i, 1);
+      trailParticles[i].life -= trailParticles[i].decay;
+      if (trailParticles[i].life <= 0) { trailParticles[i] = trailParticles[trailParticles.length - 1]; trailParticles.pop(); }
+    }
+    for (let i = multiplierPopups.length - 1; i >= 0; i--) {
+      const m = multiplierPopups[i]; m.y += m.vy; m.life -= 0.02;
+      if (m.life <= 0) { multiplierPopups[i] = multiplierPopups[multiplierPopups.length - 1]; multiplierPopups.pop(); }
     }
 
-    // Screen shake decay
-    if (shakeTimer > 0) {
-      shakeTimer--;
-      if (shakeTimer <= 0) screenShake = 0;
-    }
+    if (shakeTimer > 0) { shakeTimer--; if (shakeTimer <= 0) screenShake = 0; }
+    if (flashAlpha > 0) flashAlpha -= 0.015;
 
-    // Flash decay
-    if (flashAlpha > 0) flashAlpha -= 0.02;
+    if (displayScore < score) {
+      displayScore += Math.max(1, Math.floor((score - displayScore) * 0.2));
+      if (displayScore > score) displayScore = score;
+    }
   }
 
-  // ─── Draw ───
-  function drawBall() {
+  // ─── Drawing ───
+  function drawBackground() {
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.75);
+    skyGrad.addColorStop(0, "#0099dd");
+    skyGrad.addColorStop(0.4, "#33bbee");
+    skyGrad.addColorStop(0.7, "#77ddff");
+    skyGrad.addColorStop(1, "#aaeeff");
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Sun
+    const sunX = w * 0.82, sunY = h * 0.12;
+    const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 80);
+    sunGrad.addColorStop(0, "rgba(255,250,200,1)");
+    sunGrad.addColorStop(0.3, "rgba(255,220,100,0.8)");
+    sunGrad.addColorStop(0.7, "rgba(255,180,50,0.2)");
+    sunGrad.addColorStop(1, "rgba(255,150,50,0)");
+    ctx.fillStyle = sunGrad;
+    ctx.beginPath(); ctx.arc(sunX, sunY, 80, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sunX, sunY, 25, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff8e0"; ctx.fill();
+
+    // Clouds
+    for (const cloud of clouds) {
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.beginPath(); ctx.ellipse(cloud.x, cloud.y, cloud.width / 2, cloud.height / 2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cloud.x - cloud.width * 0.25, cloud.y + 5, cloud.width * 0.35, cloud.height * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cloud.x + cloud.width * 0.25, cloud.y + 3, cloud.width * 0.3, cloud.height * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Sand
+    const sandY = h * 0.72;
+    const sandGrad = ctx.createLinearGradient(0, sandY, 0, h * 0.82);
+    sandGrad.addColorStop(0, "#f5deb3"); sandGrad.addColorStop(0.5, "#edd9a3"); sandGrad.addColorStop(1, "#dcc48e");
+    ctx.fillStyle = sandGrad;
+    ctx.beginPath(); ctx.moveTo(0, sandY + 5);
+    for (let x = 0; x <= w; x += 20) ctx.lineTo(x, sandY + Math.sin(x * 0.02 + waveOffset * 0.5) * 3);
+    ctx.lineTo(w, h * 0.85); ctx.lineTo(0, h * 0.85); ctx.closePath(); ctx.fill();
+
+    // Palm trees
+    for (const palm of palmTrees) drawPalmTree(palm);
+
+    // Ocean
+    const waterY = h * 0.78;
+    const waterGrad = ctx.createLinearGradient(0, waterY, 0, h);
+    waterGrad.addColorStop(0, "rgba(0,180,220,0.85)");
+    waterGrad.addColorStop(0.3, "rgba(0,150,200,0.9)");
+    waterGrad.addColorStop(1, "rgba(0,80,140,0.95)");
+    ctx.fillStyle = waterGrad;
+    ctx.beginPath(); ctx.moveTo(0, waterY);
+    for (let x = 0; x <= w; x += 10) {
+      ctx.lineTo(x, waterY + Math.sin(x * 0.025 + waveOffset) * 4 + Math.sin(x * 0.01 + waveOffset * 1.5) * 2);
+    }
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+
+    // Wave foam
+    ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 5) {
+      const fy = waterY + Math.sin(x * 0.025 + waveOffset) * 4 + Math.sin(x * 0.01 + waveOffset * 1.5) * 2;
+      if (x === 0) ctx.moveTo(x, fy); else ctx.lineTo(x, fy);
+    }
+    ctx.stroke();
+  }
+
+  function drawPalmTree(palm) {
+    const sandY = h * 0.72;
+    ctx.save();
+    ctx.translate(palm.x, sandY - 5);
+    ctx.strokeStyle = "#8B6914"; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    const topX = palm.lean * palm.height;
+    ctx.quadraticCurveTo(palm.lean * palm.height * 0.5, -palm.height * 0.5, topX, -palm.height);
+    ctx.stroke();
+
+    ctx.translate(topX, -palm.height);
+    const frondAngles = [-0.8, -0.3, 0.2, 0.7, -1.2, 1.1, -0.1, 0.5];
+    for (let fi = 0; fi < frondAngles.length; fi++) {
+      ctx.save();
+      ctx.rotate(frondAngles[fi]);
+      ctx.beginPath(); ctx.moveTo(5, 0);
+      ctx.quadraticCurveTo(25, -18, 55, 10);
+      ctx.quadraticCurveTo(25, -5, 5, 0);
+      ctx.fillStyle = "rgba(34,139,34," + palm.frondAlphas[fi] + ")";
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawBeachBall() {
     ctx.save();
     ctx.translate(ball.x, ball.y);
     ctx.rotate(ball.rotation);
 
-    // Shadow
-    ctx.beginPath();
-    ctx.arc(2, 3, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(2, 3, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fill();
 
-    // Ball body
-    const grad = ctx.createRadialGradient(-4, -6, 2, 0, 0, BALL_RADIUS);
-    grad.addColorStop(0, "#ff8a3d");
-    grad.addColorStop(0.7, "#e94560");
-    grad.addColorStop(1, "#c0392b");
-    ctx.beginPath();
-    ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = grad;
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff"; ctx.fill();
 
-    // Basketball lines
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.lineWidth = 1.5;
-    // Horizontal line
-    ctx.beginPath();
-    ctx.moveTo(-BALL_RADIUS, 0);
-    ctx.lineTo(BALL_RADIUS, 0);
-    ctx.stroke();
-    // Vertical line
-    ctx.beginPath();
-    ctx.moveTo(0, -BALL_RADIUS);
-    ctx.lineTo(0, BALL_RADIUS);
-    ctx.stroke();
-    // Curved lines
-    ctx.beginPath();
-    ctx.arc(-BALL_RADIUS * 0.35, 0, BALL_RADIUS * 0.9, -Math.PI * 0.5, Math.PI * 0.5);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(BALL_RADIUS * 0.35, 0, BALL_RADIUS * 0.9, Math.PI * 0.5, -Math.PI * 0.5);
-    ctx.stroke();
+    const stripeColors = ["#ff3333", "#ffcc00", "#3399ff", "#ff3333", "#33cc33", "#ff6600"];
+    for (let i = 0; i < 6; i++) {
+      const startAngle = (Math.PI * 2 * i) / 6;
+      const endAngle = startAngle + Math.PI / 6;
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      ctx.arc(0, 0, BALL_RADIUS, startAngle, endAngle);
+      ctx.closePath(); ctx.fillStyle = stripeColors[i]; ctx.fill();
+    }
 
-    // Shine
-    ctx.beginPath();
-    ctx.arc(-5, -6, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI * 2 * i) / 6;
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(angle) * BALL_RADIUS, Math.sin(angle) * BALL_RADIUS); ctx.stroke();
+    }
+
+    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.beginPath(); ctx.arc(-5, -7, 6, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.lineWidth = 1; ctx.stroke();
 
     ctx.restore();
   }
 
-  function drawHoop(hoop) {
-    const rimY = hoop.centerY;
-    const leftX = hoop.x - HOOP_WIDTH / 2;
-    const rightX = hoop.x + HOOP_WIDTH / 2;
+  // ─── Donut drawing using ring path (no destination-out!) ───
+  function drawDonut(hoop) {
+    const cx = hoop.x, cy = hoop.centerY;
+    const outerR = HOLE_RADIUS + DONUT_TUBE;
+    const innerR = HOLE_RADIUS;
+    const squash = 0.38;
 
-    // Backboard
-    const bbX = rightX + HOOP_WIDTH * 0.15;
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.fillRect(bbX - 3, rimY - 50, 6, 100);
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bbX - 3, rimY - 50, 6, 100);
+    // Shadow
+    ctx.save(); ctx.globalAlpha = 0.2;
+    ctx.beginPath(); ctx.ellipse(cx + 3, cy + 4, outerR, outerR * squash, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#000"; ctx.fill(); ctx.restore();
 
-    // Backboard bracket to rim
-    ctx.strokeStyle = "#888";
-    ctx.lineWidth = 2;
+    // Donut body as a ring path (outer clockwise, inner counter-clockwise)
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(bbX, rimY);
-    ctx.lineTo(rightX, rimY);
-    ctx.stroke();
-
-    // Net (simple trapezoid lines)
-    ctx.strokeStyle = "rgba(255,255,255,0.2)";
-    ctx.lineWidth = 1;
-    const netSegments = 5;
-    for (let i = 0; i <= netSegments; i++) {
-      const t = i / netSegments;
-      const topX = leftX + t * HOOP_WIDTH;
-      const narrowFactor = 0.7;
-      const bottomX = hoop.x - (HOOP_WIDTH * narrowFactor) / 2 + t * HOOP_WIDTH * narrowFactor;
-      ctx.beginPath();
-      ctx.moveTo(topX, rimY);
-      ctx.lineTo(bottomX, rimY + NET_DEPTH);
-      ctx.stroke();
-    }
-    // Horizontal net lines
-    for (let j = 1; j <= 3; j++) {
-      const t = j / 4;
-      const currentWidth = HOOP_WIDTH * (1 - t * 0.3);
-      const nx = hoop.x - currentWidth / 2;
-      ctx.beginPath();
-      ctx.moveTo(nx, rimY + t * NET_DEPTH);
-      ctx.lineTo(nx + currentWidth, rimY + t * NET_DEPTH);
-      ctx.stroke();
-    }
-
-    // Rim - left
-    ctx.beginPath();
-    ctx.arc(leftX, rimY, RIM_RADIUS, 0, Math.PI * 2);
-    const rimGrad = ctx.createRadialGradient(leftX - 1, rimY - 2, 1, leftX, rimY, RIM_RADIUS);
-    rimGrad.addColorStop(0, "#ff6b35");
-    rimGrad.addColorStop(1, "#e94560");
-    ctx.fillStyle = rimGrad;
+    ctx.ellipse(cx, cy, outerR, outerR * squash, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, innerR, innerR * squash, 0, 0, Math.PI * 2, true);
+    const donutGrad = ctx.createRadialGradient(cx - 5, cy - 5, innerR * 0.3, cx, cy, outerR);
+    donutGrad.addColorStop(0, "#e8a840");
+    donutGrad.addColorStop(0.5, "#d4882a");
+    donutGrad.addColorStop(1, "#b06820");
+    ctx.fillStyle = donutGrad;
     ctx.fill();
-    ctx.strokeStyle = "#c0392b";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.restore();
 
-    // Rim - right
+    // Inner hole edge shadow
     ctx.beginPath();
-    ctx.arc(rightX, rimY, RIM_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = rimGrad;
-    ctx.fill();
-    ctx.strokeStyle = "#c0392b";
-    ctx.stroke();
+    ctx.ellipse(cx, cy, innerR + 1, (innerR + 1) * squash, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(100,50,0,0.5)"; ctx.lineWidth = 3; ctx.stroke();
 
-    // Rim connector (top of hoop)
-    ctx.strokeStyle = "#e94560";
-    ctx.lineWidth = 3;
+    // Pink frosting on top (clip to ring shape)
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(leftX, rimY);
-    ctx.lineTo(rightX, rimY);
-    ctx.stroke();
+    ctx.ellipse(cx, cy - 2, outerR - 1, (outerR - 1) * squash, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy - 2, innerR + 1, (innerR + 1) * squash, 0, 0, Math.PI * 2, true);
+    ctx.clip();
 
-    // Score glow if just scored
-    if (hoop.scored) {
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      ctx.beginPath();
-      ctx.arc(hoop.x, rimY, HOOP_WIDTH * 0.7, 0, Math.PI * 2);
-      const glowGrad = ctx.createRadialGradient(hoop.x, rimY, 0, hoop.x, rimY, HOOP_WIDTH * 0.7);
-      glowGrad.addColorStop(0, "#ffdd57");
-      glowGrad.addColorStop(1, "transparent");
-      ctx.fillStyle = glowGrad;
-      ctx.fill();
-      ctx.restore();
-    }
-  }
+    // Only fill top half
+    const frostGrad = ctx.createLinearGradient(cx - outerR, cy, cx + outerR, cy);
+    frostGrad.addColorStop(0, "#ff88bb");
+    frostGrad.addColorStop(0.3, "#ff69b4");
+    frostGrad.addColorStop(0.7, "#ff5599");
+    frostGrad.addColorStop(1, "#ff88bb");
+    ctx.fillStyle = frostGrad;
+    ctx.fillRect(cx - outerR - 2, cy - outerR * squash - 10, (outerR + 2) * 2, outerR * squash + 8);
+    ctx.restore();
 
-  function drawBackground() {
-    // Sky gradient
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
-    skyGrad.addColorStop(0, "#0f0c29");
-    skyGrad.addColorStop(0.5, "#302b63");
-    skyGrad.addColorStop(1, "#24243e");
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Stars
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    const seed = 42;
-    for (let i = 0; i < 60; i++) {
-      const sx = ((seed * (i + 1) * 7919) % w);
-      const sy = ((seed * (i + 1) * 6271) % (h * 0.6));
-      const sr = ((i * 3571) % 3) * 0.5 + 0.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // City silhouette
-    ctx.fillStyle = "#16132b";
-    const buildings = [
-      [0, 0.7], [0.05, 0.55], [0.1, 0.65], [0.15, 0.45], [0.2, 0.6],
-      [0.25, 0.5], [0.3, 0.68], [0.35, 0.4], [0.4, 0.58], [0.45, 0.62],
-      [0.5, 0.38], [0.55, 0.55], [0.6, 0.48], [0.65, 0.6], [0.7, 0.42],
-      [0.75, 0.58], [0.8, 0.52], [0.85, 0.65], [0.9, 0.5], [0.95, 0.6], [1, 0.7],
-    ];
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    for (const [bx, by] of buildings) {
-      ctx.lineTo(bx * w, h * by);
-    }
-    ctx.lineTo(w, h);
-    ctx.closePath();
-    ctx.fill();
-
-    // Building windows
-    ctx.fillStyle = "rgba(255,200,50,0.15)";
-    for (let i = 0; i < buildings.length - 1; i++) {
-      const [bx1, by1] = buildings[i];
-      const [bx2] = buildings[i + 1];
-      const topY = h * by1;
-      const bw = (bx2 - bx1) * w;
-      for (let wy = topY + 10; wy < h - 10; wy += 14) {
-        for (let wx = bx1 * w + 5; wx < bx1 * w + bw - 5; wx += 10) {
-          if ((wx * 31 + wy * 17) % 7 < 3) {
-            ctx.fillRect(wx, wy, 4, 6);
-          }
-        }
+    // Sprinkles
+    const sprinkleColors = ["#ff3333", "#ffdd00", "#33cc33", "#3399ff", "#ff6600", "#cc33ff"];
+    for (let i = 0; i < 14; i++) {
+      const angle = (Math.PI * 2 * i) / 14 + hoop.phase * 0.01;
+      const r = innerR + DONUT_TUBE * (0.3 + ((i * 7) % 5) / 10);
+      const sx = cx + Math.cos(angle) * r;
+      const sy = cy - 2 + Math.sin(angle) * r * squash;
+      if (Math.sin(angle) < 0.3) {
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(angle + 0.5);
+        ctx.fillStyle = sprinkleColors[i % sprinkleColors.length];
+        ctx.fillRect(-4, -1.5, 8, 3); ctx.restore();
       }
+    }
+
+    // Shine
+    ctx.save(); ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.ellipse(cx - outerR * 0.25, cy - outerR * 0.15, outerR * 0.3, outerR * 0.1, -0.3, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff"; ctx.fill(); ctx.restore();
+
+    // Outer edge
+    ctx.beginPath(); ctx.ellipse(cx, cy, outerR, outerR * squash, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(120,60,0,0.3)"; ctx.lineWidth = 1; ctx.stroke();
+
+    // Score glow
+    if (hoop.scored) {
+      ctx.save(); ctx.globalAlpha = 0.25;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR * 1.2);
+      g.addColorStop(0, "#ffdd57"); g.addColorStop(1, "transparent");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, outerR * 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     }
   }
 
   function drawUI() {
-    // Score
-    ctx.save();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 48px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.shadowColor = "rgba(233,69,96,0.6)";
-    ctx.shadowBlur = 12;
-    ctx.fillText(score, w / 2, 40);
-    ctx.restore();
+    ctx.save(); ctx.fillStyle = "#fff"; ctx.font = "bold 52px system-ui";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 8;
+    ctx.fillText(displayScore, w / 2, 40); ctx.restore();
 
-    // Combo
-    if (combo > 1) {
-      ctx.save();
-      ctx.fillStyle = "#ffdd57";
-      ctx.font = "bold 24px system-ui";
-      ctx.textAlign = "center";
-      ctx.fillText(`${combo}x combo!`, w / 2, 95);
+    if (cleanStreak > 1) {
+      ctx.save(); ctx.fillStyle = "#ff6600";
+      ctx.font = "bold 26px system-ui"; ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(255,100,0,0.5)"; ctx.shadowBlur = 6;
+      ctx.fillText("x" + Math.min(Math.pow(2, cleanStreak - 1), 64) + " streak!", w / 2, 98);
       ctx.restore();
     }
 
-    // Tap hint before start
+    for (const m of multiplierPopups) {
+      ctx.save(); ctx.globalAlpha = m.life;
+      ctx.fillStyle = "#ffdd00"; ctx.font = "bold 30px system-ui";
+      ctx.textAlign = "center"; ctx.shadowColor = "rgba(255,150,0,0.7)"; ctx.shadowBlur = 8;
+      ctx.fillText(m.text, m.x, m.y); ctx.restore();
+    }
+
     if (!started) {
-      ctx.save();
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.font = "18px system-ui";
-      ctx.textAlign = "center";
-      ctx.fillText("Tap anywhere to flap", w / 2, h * 0.65);
-      ctx.restore();
+      ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = "20px system-ui"; ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.3)"; ctx.shadowBlur = 4;
+      ctx.fillText("Tap anywhere to flap", w / 2, h * 0.55); ctx.restore();
     }
   }
 
   function draw() {
     ctx.save();
-
-    // Screen shake
     if (screenShake > 0) {
-      const sx = (Math.random() - 0.5) * screenShake * 2;
-      const sy = (Math.random() - 0.5) * screenShake * 2;
-      ctx.translate(sx, sy);
-      screenShake *= 0.85;
+      ctx.translate((Math.random() - 0.5) * screenShake * 2, (Math.random() - 0.5) * screenShake * 2);
+      screenShake *= 0.88;
     }
 
     drawBackground();
 
-    // Trail particles
     for (const t of trailParticles) {
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, t.radius * t.life, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(233, 69, 96, ${t.life * 0.3})`;
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.radius * t.life, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,200,100," + (t.life * 0.25) + ")"; ctx.fill();
     }
 
-    // Hoops
-    for (const hoop of hoops) {
-      drawHoop(hoop);
-    }
+    for (const hoop of hoops) drawDonut(hoop);
 
-    // Particles
     for (const p of particles) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
-      ctx.fillStyle = p.color;
-      ctx.globalAlpha = p.life;
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+      ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.fill(); ctx.globalAlpha = 1;
     }
 
-    // Ball
-    drawBall();
+    drawBeachBall();
 
-    // Score flash
     if (flashAlpha > 0) {
-      ctx.fillStyle = `rgba(255, 221, 87, ${flashAlpha})`;
+      ctx.fillStyle = "rgba(255,200,50," + flashAlpha + ")";
       ctx.fillRect(0, 0, w, h);
     }
 
@@ -599,13 +640,10 @@
     ctx.restore();
   }
 
-  // ─── Game loop ───
   function loop() {
-    update();
-    draw();
+    update(); draw();
     frameId = requestAnimationFrame(loop);
   }
 
-  // Show start screen
   init();
 })();
