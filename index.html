@@ -102,7 +102,7 @@ button:active {
     <div class="overlay" id="startScreen">
       <div class="panel">
         <h1>Beach Ball Blaze</h1>
-        <p>Tap to flap. Fly through the rings of fire!</p>
+        <p>Tap to flap. Fly through the donuts!</p>
         <button id="startButton">Play</button>
       </div>
     </div>
@@ -223,12 +223,12 @@ button:active {
     hoopsSinceStack = 0;
     nextStackAt = 10 + Math.floor(Math.random() * 3); // 10-12
 
-    for (let i = 0; i < 4; i++) spawnHoop(w + i * (w * 0.42));
+    for (let i = 0; i < 3; i++) spawnHoop(w + i * (w * 0.55));
   }
 
   function spawnHoop(x) {
-    const minY = h * 0.22;
-    const maxY = h * 0.65;
+    const minY = h * 0.28;
+    const maxY = h * 0.58;
     const centerY = minY + Math.random() * (maxY - minY);
     hoops.push({
       x, centerY, scored: false, touchedRim: false,
@@ -251,7 +251,7 @@ button:active {
   }
 
   function maybeSpawn(lastX) {
-    const nextX = lastX + w * 0.4 + Math.random() * w * 0.08;
+    const nextX = lastX + w * 0.55 + Math.random() * w * 0.1;
     if (hoopsSinceStack >= nextStackAt) {
       spawnStack(nextX);
       hoopsSinceStack = 0;
@@ -378,14 +378,21 @@ button:active {
     ball.x += nx * overlap;
     ball.y += ny * overlap;
 
+    // Gentle reflection — heavy damping so it doesn't feel jarring
     const dot = ball.vx * nx + ball.vy * ny;
-    ball.vx = (ball.vx - 2 * dot * nx) * 0.55;
-    ball.vy = (ball.vy - 2 * dot * ny) * 0.55;
+    ball.vx = (ball.vx - 2 * dot * nx) * 0.35;
+    ball.vy = (ball.vy - 2 * dot * ny) * 0.35;
 
-    ball.vx += (hoop.x - ball.x) * 0.012;
-    if (ball.y < rimY && ball.vy > 0) ball.vy *= 0.7;
+    // Strong bias toward hoop center — encourage going in
+    const toCenterX = hoop.x - ball.x;
+    ball.vx += toCenterX * 0.04;
 
-    ball.rotationSpeed = (Math.random() - 0.5) * 0.4;
+    // If ball is above rim and moving down, nudge it through
+    if (ball.y < rimY) {
+      ball.vy = Math.max(ball.vy, 1.5);
+    }
+
+    ball.rotationSpeed = (Math.random() - 0.5) * 0.3;
     hoop.touchedRim = true;
     cleanStreak = 0;
 
