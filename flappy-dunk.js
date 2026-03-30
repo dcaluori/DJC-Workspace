@@ -12,10 +12,10 @@
   // ─── Constants ───
   const GRAVITY = 0.28;
   const FLAP_STRENGTH = -6;
-  const BALL_RADIUS = 18;
-  const HOLE_RADIUS = BALL_RADIUS * 2.0; // hole diameter = 2x ball diameter
-  const DONUT_TUBE = 10; // visual thickness of donut ring
-  const RIM_COLLISION = 5; // collision thickness (smaller than visual)
+  const BALL_RADIUS = 16;
+  const HOLE_RADIUS = BALL_RADIUS * 3; // big hole - easy to fly through
+  const DONUT_TUBE = 8;
+  const RIM_COLLISION = 4;
   const HOOP_SPEED_BASE = 2.2;
 
   // ─── State ───
@@ -503,7 +503,7 @@
     const cx = hoop.x, cy = hoop.centerY;
     const outerR = HOLE_RADIUS + DONUT_TUBE;
     const innerR = HOLE_RADIUS;
-    const squash = 0.38;
+    const squash = 0.55;
 
     // Shadow
     ctx.save(); ctx.globalAlpha = 0.2;

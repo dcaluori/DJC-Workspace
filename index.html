@@ -95,10 +95,7 @@ button:active {
   transform: translateY(3px);
   box-shadow: 0 1px 0 #a3233d;
 }
-</style></head><body><canvas id="gameCanvas"></canvas>
-<div class="overlay" id="startScreen"><div class="panel"><h1>Beach Ball Blaze</h1><p>Tap to flap. Fly through the donuts!</p><button id="startButton">Play</button></div></div>
-<div class="overlay hidden" id="gameOverScreen"><div class="panel"><h2>Game Over</h2><p id="finalScoreText"></p><p id="bestScoreText"></p><button id="restartButton">Play Again</button></div></div>
-<script>
+</style></head><body><canvas id="gameCanvas"></canvas><div class="overlay" id="startScreen"><div class="panel"><h1>Beach Ball Blaze</h1><p>Tap to flap. Fly through the donuts!</p><button id="startButton">Play</button></div></div><div class="overlay hidden" id="gameOverScreen"><div class="panel"><h2>Game Over</h2><p id="finalScoreText"></p><p id="bestScoreText"></p><button id="restartButton">Play Again</button></div></div><script>
 (() => {
   "use strict";
 
@@ -113,10 +110,10 @@ button:active {
   // ─── Constants ───
   const GRAVITY = 0.28;
   const FLAP_STRENGTH = -6;
-  const BALL_RADIUS = 18;
-  const HOLE_RADIUS = BALL_RADIUS * 2.0; // hole diameter = 2x ball diameter
-  const DONUT_TUBE = 10; // visual thickness of donut ring
-  const RIM_COLLISION = 5; // collision thickness (smaller than visual)
+  const BALL_RADIUS = 16;
+  const HOLE_RADIUS = BALL_RADIUS * 3; // big hole - easy to fly through
+  const DONUT_TUBE = 8;
+  const RIM_COLLISION = 4;
   const HOOP_SPEED_BASE = 2.2;
 
   // ─── State ───
@@ -604,7 +601,7 @@ button:active {
     const cx = hoop.x, cy = hoop.centerY;
     const outerR = HOLE_RADIUS + DONUT_TUBE;
     const innerR = HOLE_RADIUS;
-    const squash = 0.38;
+    const squash = 0.55;
 
     // Shadow
     ctx.save(); ctx.globalAlpha = 0.2;
