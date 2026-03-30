@@ -106,7 +106,7 @@
     hoopsSinceStack = 0;
     nextStackAt = 10 + Math.floor(Math.random() * 3); // 10-12
 
-    for (let i = 0; i < 3; i++) spawnHoop(w + i * (w * 0.55));
+    for (let i = 0; i < 3; i++) spawnHoop(w + i * (w * 0.7));
   }
 
   function spawnHoop(x) {
@@ -134,7 +134,7 @@
   }
 
   function maybeSpawn(lastX) {
-    const nextX = lastX + w * 0.55 + Math.random() * w * 0.1;
+    const nextX = lastX + w * 0.7 + Math.random() * w * 0.1;
     if (hoopsSinceStack >= nextStackAt) {
       spawnStack(nextX);
       hoopsSinceStack = 0;
@@ -219,7 +219,7 @@
   function die() {
     if (dead) return;
     dead = true; running = false;
-    screenShake = 8; shakeTimer = 15;
+    screenShake = 0; shakeTimer = 0;
 
     if (score > bestScore) {
       bestScore = score;
